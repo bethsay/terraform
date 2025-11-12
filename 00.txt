@@ -1,6 +1,6 @@
 Terraform allows us to create cloud-agnostic IaC.
 All terraform files that we create should have the extention ".tf"
-Once Iac is prepared, we get terraform to process all of it with the below command.
+Once IaC is prepared, we get terraform to process all of it with the below command.
     #terraform plan
 Once its processed and the output looks good to us, we can use terraform to create that infrastucture with the below command.
     #terraform apply
@@ -20,7 +20,7 @@ For other systems, check https://developer.hashicorp.com/terraform/install
 
 Lets understand the core/basic concepts of a terraform project.
     #mkdir basics && cd basics
-After we create our Iac, Terraform needs to convert it to the actual apis of that specific cloud vendor. This is done by terraform providers.
+After we create our IaC, Terraform needs to convert it to the actual apis of that specific cloud vendor. This is done by terraform providers.
 Hashicorp and its partners have published these "providers" package at https://registry.terraform.io/browse/providers
 Lets start off with using the local provider which has the simple capability of creating files in the local systems.
     #vim providers.tf
@@ -29,10 +29,10 @@ Now, we need to install this provider package.
     #terraform init
 This creates a .terraform folder tree to download the binaries/packages of the required_providers and a .terraform.lock.hcl
 If any modification is made to required_providers block, we must re-run terraform init
-At the terrform registry page, the Documentation of every provider, will list and describe all the resources that can be managed by the provider.
+At the terraform registry page, the Documentation of every provider, will list and describe all the resources that can be managed by the provider.
 For local provider, we can create local_file and local_sensitive_file resources. https://registry.terraform.io/providers/hashicorp/local/latest/docs/resources/file
     #vim resources.tf
-Lets paste the code of the local_file resource. Lets process our Iac with
+Lets paste the code of the local_file resource. Lets process our IaC with
     #terraform plan
 This command will describe to us all the creations and deletions terraform intends to perform.
 If the plan looks good lets implement it with
@@ -49,7 +49,7 @@ Keep in mind, the combination or resource_name + resource_type must be unique wi
         ->Use unique values for resource_name, content and filename.
         ->There wont be error if content and filename are not unique, but results will be problematic
     #terraform apply
-From the second run of the terraform apply, terraform.tfstate is renamed to terrform.tfstate.backup and a new terraform.tfstate is created. To see if any resources were destroyed or to do a before-after comparison, this would be useful
+From the second run of the terraform apply, terraform.tfstate is renamed to terraform.tfstate.backup and a new terraform.tfstate is created. To see if any resources were destroyed or to do a before-after comparison, this would be useful
     #sdiff -s terraform.tfstate terraform.tfstate.backup
     #vim resources.tf
         ->Add a local_sensitive_file block
@@ -60,7 +60,7 @@ Have a look at the tfstate file and the sensitive_resource created by the latest
     #less terraform.tfstate
     #cat training/sensitive_file_by_tf.txt
 The sensitive data will be used as is within the tfstate and the resource.
-To delete/destroy all resource tracked by the tfstate (not the Iac) use
+To delete/destroy all resource tracked by the tfstate (not the IaC) use
     #terraform destroy
 
 Terraform plan will read our .tf files, parse it with the required_providers installed during init. This can be saved as a plan file.
@@ -72,7 +72,7 @@ This is the content that is actually used by terraform. This is then again conve
     #terraform show ./local.tfplan
         ->This allows us to read a plan before execution
 Until now, when terraform apply was run, the plan was shown and we had to approve it for execution.
-If we instead try to apply this local.tfplan, we will not see the plan in the stdout and terrform will not wait for an approval before executing it.
+If we instead try to apply this local.tfplan, we will not see the plan in the stdout and terraform will not wait for an approval before executing it.
     #terraform apply local.tfplan
 The plan is bound to the tfstate file during its creation. If the tfstate changes before the plan is applied, it will be considered as stale and cannot be used.
 This means the same plan cannot be reused because applying it causes the state to change and the plan to become stale.
@@ -130,9 +130,9 @@ If state drift is unexpected, correct it by applying the IaC and overwrite actua
     #terraform apply
 If state drift is intentional and if it must not be corrected by terraform, use the refresh command to update the tfstate reflects the actual state.
     #terraform refresh
-Terrform modifications is either a create or destroy. Very rarely change is considered.
+Terraform modifications is either a create or destroy. Very rarely change is considered.
 So resources that have undergone state drift are often considered as destryed resources according to terraform.
-Just as terrform apply includes a plan stage, terraform plan includes a refresh stage.
+Just as terraform apply includes a plan stage, terraform plan includes a refresh stage.
 
 Every resource_type have their own unique arguments whose values allows us to codeify resource creation.
 Terraform has meta-arguments (count, depends_on, for_each) to be used on any resource, and are not restricted by type. https://developer.hashicorp.com/terraform/language/meta-arguments
@@ -169,36 +169,57 @@ Use that number as resource multiplier using count meta-arguments in both resour
 While Terraform indexes these resource copies starting from 0 to n-1. We are allowed to use math to number it however we want.
 Update filename to have a incremental parent directory of count.index+1
     #vim main.tf
+Terraform console allows use to interact with variables and resources even if our IaC has not been applied. This is great for troubleshooting,
+    #terraform console
+        #var.file1
+        #var.replica
+        #local_file.file1[0]
+        #local_file.file2
+It appears that processing of var is done by referencing the code, but the local_file. is processed by referencing the state file
 Update the resources
     #terraform apply
+    #terraform console
+        #local_file.file1
+        #local_file.file1[0].content
 If default value is not set for a variable, terraform will prompt the value during plan/apply.
     #variables.tf
         ->Comment out default value of replica
+    #terraform console
+        #var.replica
     #terraform apply
     #variables.tf
         ->Uncomment default value of replica
+    #terraform console
+        #var.replica
 Updating the value of an input variable can by done during plan or apply using "-var"
     #terraform apply -var replica=5
 But most often you would maintain all your variables in a file.
 Create a file with key=value pairs. Ensure key is same as the variables used.
     #vim values.txt
-Pass this file name with the -var-file flag in plan or apply command.
+Pass this file name with the -var-file flag in plan, apply or console command.
     #terraform plan -var-file values.txt
 For the values file to be picked up by terraform without -var-file, it must be named terraform.tfvars or have the extention *.auto.tfvars
     #mv values.txt terraform.tfvars
     #terraform plan
     #mv terraform.tfvars my_values.auto.tfvars
+    #terraform console
+        #var.replica
+        #local_file.file1[0].content
     #terraform apply
     #mv my_values.auto.tfvars values.txt
 The types primitive variables available are string, number, bool, list, set, map. https://developer.hashicorp.com/terraform/language/expressions/types
 
 Locals block in terraform allows for the substitution of repeating values within a workspace with a key. https://developer.hashicorp.com/terraform/language/block/locals
-locals block is also used to maintain the value of a funtion/expression in a key that can be used repeatedly.
+locals block is also used to maintain the value of a function/expression in a key that can be used repeatedly.
 This is better than processing the function repeatedly. https://developer.hashicorp.com/terraform/language/functions
     #cd variables_and_functions
 Create a local block to uppercase a string and use it as the new parent directory of all resources
     #vim main.tf
 See if terraform can use the modification
+    #terraform console
+        #local.app
+        #upper(local.app)
+        #local.path
     #terraform apply -var-file values.txt
 
 Lets try out some complex types in variables like list, set and map. https://developer.hashicorp.com/terraform/language/expressions/types
@@ -206,6 +227,9 @@ Lets try out some complex types in variables like list, set and map. https://dev
 Create 2 variables. One must accept a set of strings with at least 2 default values
 And the other variable must accept a map of objects with at least 2 objects. Each object is a key value pair.
     #vim variables.tf
+    #terraform console
+        #var.env
+        #var.component
 Lets use these variables as the content and filename for new resources.
 for_each is the meta-argument can cycle through the variables within often the sets and maps. for_each can only work with sets and maps
     #vim main.tf
@@ -214,42 +238,87 @@ Can terraform make a plan with these variables?
 If the default values picked up successfully, lets apply it with custom values that we will define in values file.
     #vim values.txt
     #terraform apply -var-file values.txt
-Lets try the formatlist funtion to add file extention to the elements of the set variable in the locals block
+    #terraform console -var-file values.txt
+        #var.env
+        #local_file.env_files_set["dev"]
+        #var.component
+        #local_file.component_files["backend"]
+Lets try the formatlist function to add file extention to var.env
+    #terraform console -var-file values.txt
+        #formatlist("%s.%s",var.env,"md")
+Lets add this formatlist expression as env_ext into the locals block
     #vim main.tf
-list variable type is a set where elements can be refered by its positioning/ordering. Update the type of set variable to list type.
+The variable types list and set very similar. They have the same data constraints but differ in how they are referenced
+Update the type of var.env to list type.
     #vim variables.txt
-This allows us to cycle through the order using the count index rather than for_each.
-Create a new resource whose count is size of list, filename is made up by the formatlist, and content and filename cycle through count.index
+Create a new resource whose count is size of list, filename is made up by env_ext, and content and filename cycle through count.index
     #vim main.tf
     #terraform apply -var-file values.txt
+The elements of a set  are refered by their key name.
+The elements of a list are refered by their index.
+    #terraform console -var-file values.txt
+        #local_file.env_files_list[0].filename
+        #local_file.env_files_set["dev"].filename
+        #local_file.env_files_list[*].filename
+        #[for key in local_file.env_files_set : key.filename]
 Complex type variables can nest/contain other complex data. Create a variable that accepts a nested map.
     #vim variables.tf
 Type specification is optional for variables. You may set variable type as 'any' when you are not trying to be restrictive.
-Using the nested map can be done with for_each meta-argument. Where we had used each.key and each.values, we will need to use each.key and each.value.subkey
+Cycling through the nested map can be done with for_each. Where we had used each.key and each.values, we will need to use each.key and each.value.subkey
     #vim main.tf
 Can terraform make a plan with these variables?
     #terraform plan
 If the default values picked up successfully, lets apply it with custom values that we will define in values file.
     #vim values.txt
     #terraform apply -var-file values.txt
+    #terraform console -var-file values.txt
+        #var.content
+        #local_file.content_files["index"]
+        #[for key in local_file.content_files : key.content]
 
 Output blocks in terraform are used to share relevant information after the processing of an workspace.
 This is often used to create a summary on stdout or to send data to another tool for further processing.
     #cd variables_and_functions
-Create an output block to share the number of resources created. Use the length funtion for each local_file resource and add them up.
-Another output block to share the full path of the files created.
-Another output block to some of the filenames. Use the join function to convert a set or list to a string.
+We can tally the number of resources created by using the length function on each local_file resource and adding them up
+    #terraform console -var-file values.txt
+        #length(local_file.file1) + length(local_file.file2) + .. + ..
+We can fetch the parent directory where all files have been created into.
+    #terraform console -var-file values.txt
+        #local.path
+We can pull some of the filenames that our IaC has created.
+    #terraform console -var-file values.txt
+        #local_file.file1[*].filename
+Create output blocks to display these three properties of our workspace.
     #vim output.tf
     #terraform plan
-The output.path is relative. You can make it absolute path by using path.cwd in front of it. Also, use the trimprefix funtion to remove the '.' from local.path
+The output.path is relative. You can make it absolute path with functions like abspath or path.cwd+trimprefix
+    #terraform console -var-file values.txt
+        #abspath(local.path)
+        #"${path.cwd}${trimprefix(local.path, ".")}"
 The output.items repeats the parent path for each file. You can filter it out using functions like basename, trimprefix, regex, element+split within a for loop.
+    #terraform console -var-file values.txt
+        #[for attr in local_file.content_files : basename(attr.filename)]
+        #[for attr in local_file.content_files : trimprefix(attr.filename,"${local.path}/")]
+        #[for attr in local_file.content_files : regex("([^/]+)$",attr.filename)[0]]
+        #[for attr in local_file.content_files : element(split("/",attr.filename),-1)]
+Update the output block with this change
+    #vim output.tf
+    #terraform apply -var-file values.txt
+As all the resources in this workspace are managing files locally, we could use fileset function.
+The output.count can be length of fileset function.
+    #terraform console -var-file values.txt
+        #length(fileset(local.path,"*"))
+The output.items can be All files in local.path or some files files of fileset filtered using the slice or element+chunklist functions
+    #terraform console -var-file values.txt
+        #fileset(local.path,"*")
+        #slice(tolist(fileset(local.path,"*")),0,5)
+        #element(chunklist(tolist(fileset(local.path,"*")),5),0)))
+Update the output block with this change
     #vim output.tf
     #terraform apply -var-file values.txt
 After an apply, the output is also recorded as part of the state. To view them, you can
     #terraform output
     #terraform output items
-If you want to test out other functions https://developer.hashicorp.com/terraform/language/functions within the workspace, you can try using
-    #terraform console
 Any of the output can be made sensitive. Set output.path as sensitive
     #vim output.tf
     #terraform apply -var-file values.txt
@@ -260,6 +329,60 @@ Lets set sensitive as false for output.path
     #vim output.tf
     #terraform apply -var-file values.txt
 
+The problem with using fileset function is that it operates only exisiting files and cannot reflect to changes made by the running terraform plan/apply
+Use the default values of all out variables with a terraform apply
+    #terraform apply
+    #terraform output
+Even though all the files have changed, output.count and output.items are reflecting the old state.
+    #terraform apply
+    #terraform output
+Now the output matches the actual files.
+This is because every functions and expressions get evaluated/processed before any of the blocks are processed, unless there is an implicit dependency.
+If an parameter/argument of any function/expression is a terraform resource, its evaluation is delayed until the resource has been processed by terraform plan.
+If output.items is using the slice or element+chunklist operation, terraform plan/apply will fail with an error if it is followed by a destroy.
+    #terraform destroy
+    #terraform apply -var-file values.txt
+The fileset funtion can be used as is in output.items and be used with length funtion in output.count.
+But to get an accurate value when working with dynamic files in terraform, perform operations/funtions on the local_file resource instead of fileset.
+Change the values of output.count and output.items back to sum of lengths of local_files and basename of local_file
+    #vim output.tf
+    #terraform apply -var-file values.txt
+
+Data blocks in terraform are used to extract properties of any resource supported by a provider.
+The local provider, supports data sources of type local_file and local_sensitive_file. https://registry.terraform.io/providers/hashicorp/local/latest/docs/data-sources/file
+Create a set of the files that you would want to read
+    #terraform console -var-file values.txt
+        #toset([for attr in local_file.content_files : basename(attr.filename)])
+Create a data block whose filename would cycle through each of elements of this set.
+    #vim output.tf
+Create an output block that will loop through each filename and fetch its content
+    #vim output.tf
+Here, we had used data block to read properties of resources created by our IaC. If this looks like its unnecessary, thats because it is.
+In real seanrios, it is used to read properties of resources that were not created by the workspace.
+
+depends_on is a meta-argument used to define dependencies for a block. It can be used in any blocks except locals and variables.
+
+lifecycle is a meta-argument that can manage the creation and deletions of resources.
+    ->create_before_destroy = false
+        ->This is the default setting. When IaC has to implement a change but the resource does not support live modification, terraform will destroy then recreate the resource
+        ->Setting this to true could mitigate downtime but can fail if there is a unique name constraint.
+        ->This config is propagates to all upstream dependencies. terraform plan/apply would fail if you try to overwrite this implied lifecycle om any upstram resource. 
+    ->prevent_destroy = true
+        ->This setting will cause the plan/apply to fail with error if terraform needs to destroy the resource to implement a change.
+    ->ignore_changes = [ resource_type.resource_name.attribute ]
+        ->Use this if any attributes of a real infra could change, and be detected by terraform as drift, but is not required by IaC to correct.
+        ->If the list of attributes is replaced will 'all', then the Iac will be responsible for create and destroy, but will not apply updates.
+    ->replace_triggered_by = [ resource_type.resource_name, resource_type.resource_name["key"], resource_type.resource_name.attribute ]
+        ->Use this to recreate the resource if the same plan/apply will modify another resource, element(resource) or attribute(element(resource)) of the same workspace.
+    ->precondition = { condition = expression(), error_message = "String"}
+        ->Use this if you want your resource creation/modification to occur only if condition is true.
+        ->When condition is false, resource is skipped and error_message is returned as warning to stdout/console
+    ->postcondition = { condition = expression(), error_message = "String"}
+        ->Use this if you want downstream dependencies to be evaluated only if condition is true
+        ->When condition is false, resource is created/modified and error_message is returned as warning to stdout/console
+
+
+-------------------------PENDING: Try the provisioner blocks within resources-------------------------
 Modules are a fully working terraform workspace that can be reused in other workspace like an add-on package.
 Any workspace that we create is called the root module. Lets create one
     #mkdir modules
@@ -287,4 +410,3 @@ Lets Initialize and apply our root module
     #terraform init
     #terraform apply
     #terraform output
-
