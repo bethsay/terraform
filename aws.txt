@@ -1,0 +1,32 @@
+Install aws cli
+    #cd ~/Downloads/
+    #curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+    #unzip awscliv2.zip 
+    #sudo ./aws/install
+    #aws version
+    #aws help
+For the awscli to access our aws account, we need configure it with some credentials.
+AccessKey and SecretAccessKey are required as credentials. Username and Password cannot be used.
+--NEVER-- create AccessKey for your aws root account.
+Create a new IAM user that has fullaccess in S3 and IAM. On your browser, access the portal at https://us-east-1.console.aws.amazon.com/iam/home#/users/create
+    ->Step1 : Provide a name. UNcheck "access to the AWS Management Console"
+    ->Step2 : Attach policies directly. Search for S3 and select the policy that grants fullaccess. Do the same for IAM
+    ->Step3 : Review then "Create User"
+From the users list, Select the user that you have created.
+Go to the "Security Credentials" tab. Click on "Create access key". Go through the steps.
+Download the .csv of your accesskey and secret to a safe location on your system. OR, you can copy the accesskey and secret into a temporary file and not save it.
+Lets configure awscli with this access
+    #aws configure help
+    #aws configure import --csv file://aws_userforiam_accessKeys.csv
+This command may fail, but can be fixed by editing the csv file
+    #vim aws_userforiam_accessKeys.csv
+        ->Prepend first line with "User Name"
+        ->Prepend second line with "default" or with the username
+    #aws configure import --csv file://aws_userforiam_accessKeys.csv
+    #aws configure list-profiles
+    #aws configure list
+        #If you have not used "default", for this and every other awscli command, you must use the flag --profile=username
+    #ls ~/.aws/
+    #vim ~/.aws/credentials
+This credentials file can hold any number of accesskeys and secrets. Each pair would be associated with a profilename/username
+The only way to remove or delete any set of credentials is by editing this credentials file.
