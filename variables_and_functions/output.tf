@@ -1,12 +1,12 @@
 output "path" {
   # value = "They are all created and stored in ${local.path}"
   # value = "They are all created and stored in ${path.cwd}${trimprefix(local.path, ".")}"
-  value = "They are all created and stored in ${abspath(local.path)}"
+  value     = "They are all created and stored in ${abspath(local.path)}"
   sensitive = false
 }
 output "items" {
   # value = format("Some of these items are %s", join(", ",local_file.file1[*].filename))
-  value = format("Some of these items are %s", join(", ",[for attr in local_file.content_files : basename(attr.filename)]))
+  value = format("Some of these items are %s", join(", ", [for attr in local_file.content_files : basename(attr.filename)]))
   # value = format("Some of these items are %s", join(", ",[for attr in local_file.content_files : trimprefix(attr.filename,"${local.path}/")]))
   # value = format("Some of these items are %s", join(", ",[for attr in local_file.content_files : regex("([^/]+)$",attr.filename)[0]]))
   # value = format("Some of these items are %s", join(", ",[for attr in local_file.content_files : element(split("/",attr.filename),-1)]))

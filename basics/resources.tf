@@ -13,5 +13,5 @@ resource "local_sensitive_file" "sensitive_resource" {
 resource "local_file" "another_resource" {
   content  = "...Hello again World${count.index}...!!\n"
   filename = "${path.module}/training/another${count.index}_file_by_tf.txt"
-  count = 5
+  count    = 5
 }

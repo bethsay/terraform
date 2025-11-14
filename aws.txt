@@ -5,18 +5,32 @@ Install aws cli
     #sudo ./aws/install
     #aws version
     #aws help
+
 For the awscli to access our aws account, we need configure it with some credentials.
 AccessKey and SecretAccessKey are required as credentials. Username and Password cannot be used.
 --NEVER-- create AccessKey for your aws root account.
 Create a new IAM user that has fullaccess in S3 and IAM. On your browser, access the portal at https://us-east-1.console.aws.amazon.com/iam/home#/users/create
-    ->Step1 : Provide a name. UNcheck "access to the AWS Management Console"
+    ->Step1 : Provide a name. --uncheck-- "access to the AWS Management Console"
     ->Step2 : Attach policies directly. Search for S3 and select the policy that grants fullaccess. Do the same for IAM
     ->Step3 : Review then "Create User"
 From the users list, Select the user that you have created.
 Go to the "Security Credentials" tab. Click on "Create access key". Go through the steps.
-Download the .csv of your accesskey and secret to a safe location on your system. OR, you can copy the accesskey and secret into a temporary file and not save it.
+Download the .csv of your accesskey and secret to a safe location on your system. OR, stay on the page until awscli config is done.
+Ensure that the downloaded path is not a shared directory and is not a any type of repo.
 Lets configure awscli with this access
     #aws configure help
+    #aws configure
+        ->Paste the accesskey and secret according to the prompts
+        ->Enter the aws region from which is expected to have most operations
+        ->Specify the format awscli shoud use while responding to queries, ie, json, text, or table
+    #aws configure list
+    #cat ~/.aws/config
+    #cat ~/.aws/credentials
+The accesskey, secret, region, output are now associated with the "default" profile.
+Any number of accesskeys and secrets pairs can be configure under unique profilenames.
+The only way to remove or delete any set of credentials is by editing this credentials file.
+But you can overwrite the credentials of a profile by running the import command again.
+If the accesskey and secrets was downloaded as a csv file, it can be used in the import command.
     #aws configure import --csv file://aws_userforiam_accessKeys.csv
 This command may fail, but can be fixed by editing the csv file
     #vim aws_userforiam_accessKeys.csv
@@ -25,8 +39,18 @@ This command may fail, but can be fixed by editing the csv file
     #aws configure import --csv file://aws_userforiam_accessKeys.csv
     #aws configure list-profiles
     #aws configure list
-        #If you have not used "default", for this and every other awscli command, you must use the flag --profile=username
-    #ls ~/.aws/
-    #vim ~/.aws/credentials
-This credentials file can hold any number of accesskeys and secrets. Each pair would be associated with a profilename/username
-The only way to remove or delete any set of credentials is by editing this credentials file.
+        ->If you have not used "default", use the flag --profile=username
+    #cat ~/.aws/credentials
+To interactively set accesskeys and secrets for the profile foo
+    #aws configure --profile foo
+
+Lets verify if the credentials work. Lets list create and destroy an s3 bucket
+    #aws s3 help
+    #aws s3 ls
+    #aws s3 mb "s3://mynewbucket-willwork"
+        ->If default region was not configured, use the flag --region=us-east-1
+You can check aws console if the bucket was created or not
+    #aws s3 ls
+    #aws s3 rb "s3://mynewbucket-willwork"
+    #aws s3 ls
+

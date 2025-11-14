@@ -60,6 +60,16 @@ Have a look at the tfstate file and the sensitive_resource created by the latest
     #less terraform.tfstate
     #cat training/sensitive_file_by_tf.txt
 The sensitive data will be used as is within the tfstate and the resource.
+Terraform can format your files and make it easy to read and maintain. This action will not affect the IaC functionalities
+To get list of files that would be modified by formatting, use
+    #terraform fmt -check
+To see the difference before and after running the formatting, use
+If -check has an empty response, terraform thinks your files are already formatted properly
+To allow terraform to edit all your files with proper spacing, and get the diff response before and after formatting, use
+    #terraform fmt -diff
+If you trust terraform fmt to make the IaC look nice and dont need any changelog, use
+    #terraform fmt
+It is good practice to format your IaC before pushing your code to your code repositories.
 To delete/destroy all resource tracked by the tfstate (not the IaC) use
     #terraform destroy
 
@@ -90,14 +100,24 @@ Terraform can execute an apply or destroy without asking for approval when using
 Every terraform apply implements the plan and update the terraform.tfstate
     #cd basics
     #less terraform.tfstate
-Another way to read the current state is with the terraform state command
+Another way to read the current state is with the terraform state command or the terraform show command
     #terraform state -h
     #terraform state list
         ->Lists all resource.identifier managed in this terraform workspace.
-    #terraform state show resource_type.resource_name
+    #terraform state show local_file.another_resource[1]
         ->Check the details of any of resource.identifier mentioned in the list command.
     #terraform state show local_sensitive_file.sensitive_resource
         ->sensitive data of any resource will be masked just as it was in the stdout of plan and apply
+    #terraform show
+        ->Shows the state content in the format of terraform blocks of code
+    #terraform show -json | jq
+        ->Shows the same data as is in terraform.tfstate with minor differences in representation of some keys and values
+    #terraform show -json | jq '.values.root_module.resources[].address'
+        ->Same as the terraform list command 
+    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="local_file.another_resource[1]") | .values'
+        ->Same as the terraform state show local_file.another_resource[1]
+    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="local_file.another_resource[1]") | .values.filename'
+        ->Cannot be done with terraform state command, but very useful filters
 While the state show command will mask sensitive data, it is stored as plain text in terraform.tfstate
 By default, tfstate is stored locally in the workspace which is unsecure.
 You can maintain tfstate at a remote secure location by defining a backend configuration. Lets try s3 as a backend.
@@ -148,7 +168,8 @@ Using the -target flag in plan, apply, or destroy command can get terraform to o
     #terraform destroy -target=local_file.another_resource[2]
     #terraform apply -target=local_file.another_resource[2]
 It is not standard practice to use -target. Its best to edit/comment all the changes in main.tf.
-Lets revisit this for other meta-arguments.
+Thats all about the basics. Before we commit and move to advanced terraform use, lets format our code
+    #terraform fmt -diff
 
 Variables block in terraform allows us to parameterize the code making it reuseable across workspaces. https://developer.hashicorp.com/terraform/language/block/variable
 Initialize a new workspace (directory or folder) with a local povider
@@ -371,7 +392,7 @@ lifecycle is a meta-argument that can manage the creation and deletions of resou
         ->This setting will cause the plan/apply to fail with error if terraform needs to destroy the resource to implement a change.
     ->ignore_changes = [ resource_type.resource_name.attribute ]
         ->Use this if any attributes of a real infra could change, and be detected by terraform as drift, but is not required by IaC to correct.
-        ->If the list of attributes is replaced will 'all', then the Iac will be responsible for create and destroy, but will not apply updates.
+        ->If the list of attributes is replaced will 'all', then the IaC will be responsible for create and destroy, but will not apply updates.
     ->replace_triggered_by = [ resource_type.resource_name, resource_type.resource_name["key"], resource_type.resource_name.attribute ]
         ->Use this to recreate the resource if the same plan/apply will modify another resource, element(resource) or attribute(element(resource)) of the same workspace.
     ->precondition = { condition = expression(), error_message = "String"}
@@ -381,6 +402,8 @@ lifecycle is a meta-argument that can manage the creation and deletions of resou
         ->Use this if you want downstream dependencies to be evaluated only if condition is true
         ->When condition is false, resource is created/modified and error_message is returned as warning to stdout/console
 
+Thats all about the advanced topics. Before we commit and move to basics of terraform modules use, lets format our code
+    #terraform fmt -diff
 
 -------------------------PENDING: Try the provisioner blocks within resources-------------------------
 Modules are a fully working terraform workspace that can be reused in other workspace like an add-on package.
@@ -410,3 +433,7 @@ Lets Initialize and apply our root module
     #terraform init
     #terraform apply
     #terraform output
+Thats all about modules topic. Before we commit, lets format our code
+    #terraform fmt -check
+    #terraform fmt -check -recursive
+    #terraform fmt -diff -recursive
