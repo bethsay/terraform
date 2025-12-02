@@ -103,7 +103,7 @@ Every terraform apply implements the plan and update the terraform.tfstate
 Another way to read the current state is with the terraform state command or the terraform show command
     #terraform state -h
     #terraform state list
-        ->Lists all resource.identifier managed in this terraform workspace.
+        ->Lists all resource.identifier managed in this terraform project.
     #terraform state show local_file.another_resource[1]
         ->Check the details of any of resource.identifier mentioned in the list command.
     #terraform state show local_sensitive_file.sensitive_resource
@@ -113,13 +113,13 @@ Another way to read the current state is with the terraform state command or the
     #terraform show -json | jq
         ->Shows the same data as is in terraform.tfstate with minor differences in representation of some keys and values
     #terraform show -json | jq '.values.root_module.resources[].address'
-        ->Same as the terraform list command 
+        ->Same as the terraform list command
     #terraform show -json | jq '.values.root_module.resources[] | select(.address=="local_file.another_resource[1]") | .values'
         ->Same as the terraform state show local_file.another_resource[1]
     #terraform show -json | jq '.values.root_module.resources[] | select(.address=="local_file.another_resource[1]") | .values.filename'
         ->Cannot be done with terraform state command, but very useful filters
 While the state show command will mask sensitive data, it is stored as plain text in terraform.tfstate
-By default, tfstate is stored locally in the workspace which is unsecure.
+By default, tfstate is stored locally in the project directory, which is unsecure.
 You can maintain tfstate at a remote secure location by defining a backend configuration. Lets try s3 as a backend.
     #vim providers.tf
         ->terraform {
@@ -136,8 +136,8 @@ Lets revisit to check the subcommands of terraform state.
 When plan or apply is being run, the tfstate is pulled into memory. It is compared and updated with the actual infrastucture Configuration.
 State Drift is said to have occured if the actual infra is different from the tfstate. This can also be seen as modifications of the in-memory tfstate.
 State Drift happens when actual infra is modified without terraform. Here actual state will be different from state file and code.tf
-The plan or apply commands then parse tf files of the workspace with provider and is again compared with the in-memory tfstate and the difference is outputted to us for approval.
-Lets cause State Drift in our workspace.
+The plan or apply commands then parse tf files of the project with provider and is again compared with the in-memory tfstate and the difference is outputted to us for approval.
+Lets cause State Drift in our project.
     #cd basics
     #echo "State Drift is happening" > ./training/file_by_tf.txt
 Is this change detected by tf state?
@@ -171,8 +171,8 @@ It is not standard practice to use -target. Its best to edit/comment all the cha
 Thats all about the basics. Before we commit and move to advanced terraform use, lets format our code
     #terraform fmt -diff
 
-Variables block in terraform allows us to parameterize the code making it reuseable across workspaces. https://developer.hashicorp.com/terraform/language/block/variable
-Initialize a new workspace (directory or folder) with a local povider
+Variables block in terraform allows us to parameterize the code making it reuseable. https://developer.hashicorp.com/terraform/language/block/variable
+Initialize a new project (directory or folder) with a local povider
     #mkdir variables_and_functions && cd variables_and_functions
     #vim providers.tf
         ->Use the hashicorp/local as a required_providers.
@@ -228,9 +228,9 @@ For the values file to be picked up by terraform without -var-file, it must be n
         #local_file.file1[0].content
     #terraform apply
     #mv my_values.auto.tfvars values.txt
-The types primitive variables available are string, number, bool, list, set, map. https://developer.hashicorp.com/terraform/language/expressions/types
+The types primitive variables available are string, number, bool. https://developer.hashicorp.com/terraform/language/expressions/types
 
-Locals block in terraform allows for the substitution of repeating values within a workspace with a key. https://developer.hashicorp.com/terraform/language/block/locals
+Locals block in terraform allows for the substitution of repeating values within a project with a key. https://developer.hashicorp.com/terraform/language/block/locals
 locals block is also used to maintain the value of a function/expression in a key that can be used repeatedly.
 This is better than processing the function repeatedly. https://developer.hashicorp.com/terraform/language/functions
     #cd variables_and_functions
@@ -281,6 +281,9 @@ The elements of a list are refered by their index.
         #local_file.env_files_list[0].filename
         #local_file.env_files_set["dev"].filename
         #local_file.env_files_list[*].filename
+        #keys(local_file.env_files_set)[*]
+        #values(local_file.env_files_set)[*].filename
+        #[for key in local_file.env_files_list : key.filename]
         #[for key in local_file.env_files_set : key.filename]
 Complex type variables can nest/contain other complex data. Create a variable that accepts a nested map.
     #vim variables.tf
@@ -295,9 +298,10 @@ If the default values picked up successfully, lets apply it with custom values t
     #terraform console -var-file values.txt
         #var.content
         #local_file.content_files["index"]
+        #values(local_file.content_files)[*].content
         #[for key in local_file.content_files : key.content]
 
-Output blocks in terraform are used to share relevant information after the processing of an workspace.
+Output blocks in terraform are used to share relevant information after deploying a project.
 This is often used to create a summary on stdout or to send data to another tool for further processing.
     #cd variables_and_functions
 We can tally the number of resources created by using the length function on each local_file resource and adding them up
@@ -309,7 +313,7 @@ We can fetch the parent directory where all files have been created into.
 We can pull some of the filenames that our IaC has created.
     #terraform console -var-file values.txt
         #local_file.file1[*].filename
-Create output blocks to display these three properties of our workspace.
+Create output blocks to display these three properties of our project.
     #vim outputs.tf
     #terraform plan
 The output.path is relative. You can make it absolute path with functions like abspath or path.cwd+trimprefix
@@ -325,7 +329,7 @@ The output.items repeats the parent path for each file. You can filter it out us
 Update the output block with this change
     #vim outputs.tf
     #terraform apply -var-file values.txt
-As all the resources in this workspace are managing files locally, we could use fileset function.
+As all the resources in this project are managing files locally, we could use fileset function.
 The output.count can be length of fileset function.
     #terraform console -var-file values.txt
         #length(fileset(local.path,"*"))
@@ -373,13 +377,14 @@ Data blocks in terraform are used to extract properties of any resource supporte
 The local provider, supports data sources of type local_file and local_sensitive_file. https://registry.terraform.io/providers/hashicorp/local/latest/docs/data-sources/file
 Create a set of the files that you would want to read
     #terraform console -var-file values.txt
+        #toset(values(local_file.content_files)[*].filename)
         #toset([for attr in local_file.content_files : basename(attr.filename)])
-Create a data block whose filename would cycle through each of elements of this set.
+Create a data block whose filename would cycle through each of elements of either set.
     #vim outputs.tf
-Create an output block that will loop through each filename and fetch its content
+Create an output block that will loop through each filename and fetch its content. You could use trimspace function with it.
     #vim outputs.tf
 Here, we had used data block to read properties of resources created by our IaC. If this looks like its unnecessary, thats because it is.
-In real seanrios, it is used to read properties of resources that were not created by the workspace.
+In real seanrios, it is used to read properties of resources that were not created by the project.
 
 depends_on is a meta-argument used to define dependencies for a block. It can be used in any blocks except locals and variables.
 
@@ -394,7 +399,7 @@ lifecycle is a meta-argument that can manage the creation and deletions of resou
         ->Use this if any attributes of a real infra could change, and be detected by terraform as drift, but is not required by IaC to correct.
         ->If the list of attributes is replaced will 'all', then the IaC will be responsible for create and destroy, but will not apply updates.
     ->replace_triggered_by = [ resource_type.resource_name, resource_type.resource_name["key"], resource_type.resource_name.attribute ]
-        ->Use this to recreate the resource if the same plan/apply will modify another resource, element(resource) or attribute(element(resource)) of the same workspace.
+        ->Use this to recreate the resource if the same plan/apply will modify another resource, element(resource) or attribute(element(resource)) of the same project.
     ->precondition = { condition = expression(), error_message = "String"}
         ->Use this if you want your resource creation/modification to occur only if condition is true.
         ->When condition is false, resource is skipped and error_message is returned as warning to stdout/console
@@ -406,10 +411,10 @@ Thats all about the advanced topics. Before we commit and move to basics of terr
     #terraform fmt -diff
 
 -------------------------PENDING: Try the provisioner blocks within resources-------------------------
-Modules are a fully working terraform workspace that can be reused in other workspace like an add-on package.
-Any workspace that we create is called the root module. Lets create one
+Modules are a fully working terraform project that can be reused in other project like an add-on package.
+Any project that we create is called the root module. Lets create one
     #mkdir modules
-This root module can contain other workspaces like a package. These are called child modules. Lets create one.
+This root module can contain other projects like a package. These are called child modules. Lets create one.
     #mkdir modules/child_module
 Hashicorp maintains a registry of modules we can use in our root module. https://registry.terraform.io/browse/modules
 Let use code from variables_and_functions to create a child module.

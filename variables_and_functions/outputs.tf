@@ -19,9 +19,12 @@ output "count" {
   # value = format("We have %d files created", length(fileset(local.path, "**")))
 }
 data "local_file" "items_content" {
+  # for_each = toset(values(local_file.content_files)[*].filename)
+  # filename = each.key
   for_each = toset([for attr in local_file.content_files : basename(attr.filename)])
   filename = "${local.path}/${each.key}"
 }
 output "items_content" {
+  # value  = values(data.local_file.items_content)[*].content
   value = [for attr in data.local_file.items_content : trimspace(attr.content)]
 }

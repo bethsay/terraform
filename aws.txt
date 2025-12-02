@@ -56,21 +56,92 @@ You can check aws console if the bucket was created or not
 
 Lets start using terraform to create and manage resources in this aws account of ours.
     #mkdir aws && cd aws
+Lets start with managing an S3 bucket.
 Use the aws provider and set it up with shared config and creds. Refer https://registry.terraform.io/providers/hashicorp/aws/latest/docs#shared-configuration-and-credentials-files
     #vim providers.tf
 The config in aws providers block is optional if you are using default profile and default paths.
-Install the provider and Initialize the workspace
+This would also be a good spot to add default_tags that you would want all your resources to inherit.
+Initialize the project by installing the provider plugin
     #terraform init
-Browse the docs for resources and data blocks supported by the aws provider.
+Browse the docs for resources and data sources supported by the aws provider.
+Lets start off by managing an S3 bucket. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket
+Create your first S3 bucket using the aws_s3_bucket resource with only its bucket argument.
+    #vim s3.tf
+    #terraform apply
+If the bucket name is not globally unique, you will see errors like "BucketAlreadyExists" or "Header malformed : Wrong region"
+Using the bucket_prefix argument instead, will allow aws to add a random suffix to your bucket name.
+Include a hyphen at the end of the prefix so that the bucket_name looks nice.
+Use the force_destroy argument so that we can still destroy or recreate even if bucket is not empty or is processing uploads/downloads.
+    #vim s3.tf
+    #terraform apply
+    #terraform state list
+    #terraform state show aws_s3_bucket.first
+    #aws s3api list-buckets
+Create output block named mys3_id to display the name of the s3 bucket that was created
+    #vim output.tf
+    #terraform apply
+    #terraform output
+You can use the tags argument to add new tags or override the values of any default_tags.
+    #vim s3.tf
+    #terraform apply
+    #terraform state show aws_s3_bucket.first
+    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_s3_bucket.first") | .values | with_entries( select( .key | startswith("tag") ) )'
+    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_s3_bucket.first") | .values.tags'
+    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_s3_bucket.first") | .values.tags_all'
+    #aws s3api get-bucket-tagging help
+    #aws s3api get-bucket-tagging --bucket $(aws s3api list-buckets --query "Buckets[].Name" --output text)
+    #aws s3api get-bucket-tagging --bucket $(terraform output -raw s3_id)
+    #terraform output -raw s3_id | xargs -I?? aws s3api get-bucket-tagging --bucket ??
+    #terraform output -raw s3_id | { read OUT; aws s3api get-bucket-tagging --bucket $OUT; }
+Create variable blocks mys3_prefix, bucket_force_destroy and bucket_extra_tags to handle the inputs.
+Set default values for each variable. Its safer to set force_destroy as false but lets use true for our training project.
+    #vim variable.tf
+Update the argument values of first aws_s3_bucket to use these variable ids.
+Also, create a local mys3_prefix_hyphen thats just a hyphenated version of mys3_prefix variable
+    #vim s3.tf
+    #terraform apply
+
+
+
+
+
+Using aws_s3_bucket_versioning, we will enable versioning.
+    #vim s3.tf
+Or you could generate a UUID and append it to your bucket name. This is an AWS recommendion for naming resources.
+    #uuidgen -s -n @oid -N "my-s3-bucket-name" | cut -d '-' -f 1
+Create the resources and check if they have been created via console or cli
+    #terraform apply
+    #terraform state list
+    #aws s3api list-buckets
+    #aws s3api get-bucket-versioning --bucket <bucket_name>
+
+
+Lets use S3 for maintaining the backend of our aws terraform projects. https://developer.hashicorp.com/terraform/language/backend/s3
+If backend config is changed, you will have to perform init again.
+To ignore previous
+    #terraform init -reconfigure
+To migrate-state
+    #terraform init -force-copy
+
+    #vim .terraformrc
+
+Using the aws_s3_object resource lets upload files into this S3 bucket.
+The bucket argument will be the destination of our file upload.
+The key argument will be the path/filename within the bucket.
+The source argument is the path of the file that we want to upload. Alternatively, you can use the content argument to write into key
+    #vim s3.tf
+Create the resources and check if they have been created via console or cli
+    #terraform apply
+    #terraform state list
+    #aws s3api list-objects-v2 --bucket <bucket_name>
+
+The .terraform folder contains the the plugin of the aws provider, which takes up 750Mb of disk space.
+
 Using the aws_iam_user resource, create a user. name is a required argument. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user
     #vim iam.tf
-Using the aws_s3_bucket resource, create a bucket. If bucket argument is skipped, it will get a random name.
-    #vim s3.tf
-If the bucket name is not unique, you will see errors like "BucketAlreadyExists" or "Header malformed : Wrong region"
 Create the resources and check if they have been created via console or cli
     #terraform apply
     #terraform state
-    #aws s3api list-buckets
     #aws iam list-users
     #aws iam get-user --user-name tf-user
 Using aws_iam_access_key resource, create accesskey and secret. user is a required argument and should refer the name or id attribute of the aws_iam_user resource.
@@ -82,9 +153,10 @@ The aws_iam_access_key resource is created with its secret but is masked as it i
     #less terraform.tfstate
     #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_iam_access_key.first") | .values.secret'
 
+To generate aws user policies, Use https://awspolicygen.s3.amazonaws.com/policygen.html
 
 The iam_admin user that we had create via aws console is only authorized to create IAM users and S3 buckets.
 Terraform will use the iam_admin authorization to create IAM user with greater permissions.
 The access of these codeified users will allow us to create and manage any resource in our aws account.
-Lets create a workspace which we can use to manage new IAM users and their permission
+Lets create a project which we can use to manage new IAM users and their permission
 
