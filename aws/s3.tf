@@ -10,25 +10,37 @@ resource "aws_s3_bucket" "first" {
 }
 
 locals { mys3_prefix_hyphen = "${var.mys3_prefix}-" }
-#
-# resource "random_id" "second" {
-#   count = 0
-#   byte_length = 7
-#   prefix = "${local.mys3}-"
-# }
-#
-# resource "random_pet" "second" {
-#   length = 3
-#   prefix = "${local.mys3}"
-# }
-#
-# resource "aws_s3_bucket" "second" {
-#   for_each = toset(["${lower(random_id.second.b64_url)}", "${random_pet.second.id}"])
-#   bucket = each.key
-#   force_destroy = true
-# }
-#
-# resource "random_uuid" "third" {}
+
+resource "random_id" "second" {
+  # count = 0
+  byte_length = 7
+  prefix = local.mys3_prefix_hyphen
+}
+
+resource "random_pet" "second" {
+  length = 3
+  prefix = var.mys3_prefix
+}
+
+resource "aws_s3_bucket" "second" {
+  # # for_each = toset(["${lower(replace(random_id.second.b64_url, "_", "-"))}", "${random_pet.second.id}"])
+  # # bucket = each.key
+  for_each = local.id_map_second
+  bucket = each.value
+  # count = length(local.id_list_second)
+  # bucket = local.id_list_second[count.index]
+  force_destroy = var.bucket_force_destroy
+}
+
+locals {
+  id_list_second = tolist(["${lower(replace(random_id.second.b64_url, "_", "-"))}", "${random_pet.second.id}"])
+  id_map_second = tomap({
+    second_id = "${lower(replace(random_id.second.b64_url, "_", "-"))}"
+    second_pet = "${random_pet.second.id}"
+  })
+}
+
+resource "random_uuid" "third" {}
 #
 # data "external" "third" {
 #   for_each = toset(["${local.mys3}", ])
