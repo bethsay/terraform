@@ -69,81 +69,97 @@ Create your first S3 bucket using the aws_s3_bucket resource with only its bucke
     #vim s3.tf
     #terraform apply
 If the bucket name is not globally unique, you will see errors like "BucketAlreadyExists" or "Header malformed : Wrong region"
-Using the bucket_prefix argument instead, guarentees uniqueness by appending a 26 digit number to it.
+Disable/Comment-out the first aws_s3_bucket resource.
+Create the second aws_s3_bucket resource with bucket_prefix argument.
+The bucket_prefix argument, guarentees uniqueness by appending a 26 digit number to it.
 The terraform aws provider generates a time based unique random number that has the format YYYYMMDDhhmmssXXXX00000001.
 Include a hyphen at the end of the prefix so that the bucket_name looks nice.
 Use the force_destroy argument so that we can still destroy or recreate even if bucket is not empty or is processing uploads/downloads.
     #vim s3.tf
     #terraform apply
     #terraform state list
-    #terraform state show aws_s3_bucket.first
+    #terraform state show aws_s3_bucket.second
     #aws s3api list-buckets
-Create output block named mys3_id_first to display the name of the s3 bucket that was created
+Create output block named mys3_id_second to display the name of the s3 bucket that was created
+    #terraform console
+        #aws_s3_bucket.second.id
     #vim output.tf
     #terraform apply
     #terraform output
-    #terraform output mys3_id_first
+    #terraform output mys3_id_second
 The tags argument in aws_s3_bucket resource allows us to add new tags and/or override the values of any default_tags.
     #vim s3.tf
     #terraform apply
-    #terraform state show aws_s3_bucket.first
-    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_s3_bucket.first") | .values | with_entries( select( .key | startswith("tag") ) )'
-    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_s3_bucket.first") | .values.tags'
-    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_s3_bucket.first") | .values.tags_all'
+    #terraform state show aws_s3_bucket.second
+    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_s3_bucket.second") | .values | with_entries( select( .key | startswith("tag") ) )'
+    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_s3_bucket.second") | .values.tags'
+    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_s3_bucket.second") | .values.tags_all'
     #aws s3api get-bucket-tagging help
     #aws s3api get-bucket-tagging --bucket $(aws s3api list-buckets --query "Buckets[].Name" --output text)
-    #aws s3api get-bucket-tagging --bucket $(terraform output -raw mys3_id_first )
-    #terraform output -raw mys3_id_first | xargs -I?? aws s3api get-bucket-tagging --bucket ??
-    #terraform output -raw mys3_id_first | { read OUT; aws s3api get-bucket-tagging --bucket $OUT; }
+    #aws s3api get-bucket-tagging --bucket $(terraform output -raw mys3_id_second )
+    #terraform output -raw mys3_id_second | xargs -I?? aws s3api get-bucket-tagging --bucket ??
+    #terraform output -raw mys3_id_second | { read OUT; aws s3api get-bucket-tagging --bucket $OUT; }
 Create variable blocks mys3_prefix, bucket_force_destroy and bucket_extra_tags to handle the inputs.
 Set default values for each variable. Its safer to set force_destroy as false but lets use true for our training project.
     #vim variable.tf
+    #terraform console
+        #var.mys3_prefix
+        #var.bucket_force_destroy
+        #var.bucket_extra_tags
 Create a local mys3_prefix_hyphen thats just a hyphenated version of mys3_prefix variable
 Update the argument values of aws_s3_bucket to use these variables and locals.
     #vim s3.tf
+    #terraform console
+        #local.mys3_prefix_hyphen
     #terraform apply
 We will look at bucket versioning and uploading into the bucket later.
 
-S3 buckets need globally unique name. We achieved this by adding a time+random number to the name using bucket prefix.
-Lets use the Random provider to create random resources that can be applied wherever we need uniqueness. https://registry.terraform.io/providers/hashicorp/random/latest/docs
+S3 buckets need globally unique name. We got this by adding a time+random number to the name using bucket prefix.
+Lets use Terraforms Random provider to create random resources that can be applied wherever we need uniqueness. https://registry.terraform.io/providers/hashicorp/random/latest/docs
     #vim providers.tf
     #terraform init
-Lets create a random_id resource. byte_length is required and defines the size of the random generated binary code.
-Lets create a random_pet resource. length is a default of 2 readable words.
+Lets create a random_id  resource with a byte_length of 7. byte_length is required and defines the size of the random generated binary code.
+Lets create a random_pet resource with a length      of 3. length has a default value of 2 readable words.
     #vim s3.tf
     #terraform apply
-    #terraform state show random_pet.second
-    #terraform state show random_id.second
-None of the attributes of random_id.second resource is the actual random code. All attributes are encodings and/or conversions of a non-printable code.
-They are all converted to forms that we can use.
-If you are curious to see the real code.
-    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="random_id.second") |.values'
-    #terraform show -json | jq -r '.values.root_module.resources[]|select(.address=="random_id.second")|.values.b64_std'
-    #terraform show -json | jq -r '.values.root_module.resources[]|select(.address=="random_id.second")|.values.b64_std' | base64 -d | hexdump -C
-    #terraform show -json | jq -r '.values.root_module.resources[]|select(.address=="random_id.second")|.values.b64_std' | base64 -d | xxd -p
-    #terraform show -json | jq -r '.values.root_module.resources[]|select(.address=="random_id.second")|.values.b64_std' | base64 -d | xxd -p | { read hex_val; echo $((16#$hex_val)); }
-Creating a output block for random_id.second.b64_std would have allows us avoid the long jq.
+    #terraform state show random_pet.third
+    #terraform state show random_id.third
+None of the attributes you see of random_id.third resource is the actual random code.
+All attributes are encodings and/or conversions of some non-printable code.
+I would be using the b64_url attribute as it has letters and numbers.
+If you are curious to see the real code of random_id,
+    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="random_id.third") |.values'
+    #terraform show -json | jq -r '.values.root_module.resources[]|select(.address=="random_id.third")|.values.b64_std'
+    #terraform show -json | jq -r '.values.root_module.resources[]|select(.address=="random_id.third")|.values.b64_std' | base64 -d | hexdump -C
+    #terraform show -json | jq -r '.values.root_module.resources[]|select(.address=="random_id.third")|.values.b64_std' | base64 -d | xxd -p
+    #terraform show -json | jq -r '.values.root_module.resources[]|select(.address=="random_id.third")|.values.b64_std' | base64 -d | xxd -p | { read hex_val; echo $((16#$hex_val)); }
+Creating an output block for random_id.third.b64_std would have allows us avoid the long jq. But we cannot isolate it when we use the prefix argument in random_id.
 Set the prefix argument in random_id and random_pet resources with mys3_prefix_hyphen and mys3_prefix.
     #vim s3.tf
+Lets also use variables to manage the length of random_id and random_pet
+    #vim variables.tf
+    #terraform console
+        #var.suffix_string_length
+        #var.suffix_word_count
     #terraform apply
-Lets create new aws_s3_buckets whose names would be random_id.second.b64_url and random_pet.second.id. We can cycle through them using for each
-Although the b64_url looks usable, s3 buckets names cannot have uppercase and or underscore(_).
+Lets create new aws_s3_buckets whose names would be random_id.third.b64_url and random_pet.third.id. We can cycle through them using for each
+Although the b64_url looks usable, s3 buckets names cannot have uppercase and/or underscore(_).
 So, substitute "_" with "-" with the replace function and also use the lower function on it. https://developer.hashicorp.com/terraform/language/functions/replace
     #terraform console
-        #random_id.second.b64_url
-        #lower(replace(random_id.second.b64_url, "_", "-"))
-        #toset(["${lower(replace(random_id.second.b64_url, "_", "-"))}", "${random_pet.second.id}"])
+        #random_id.third.b64_url
+        #lower(replace(random_id.third.b64_url, "_", "-"))
+        #toset(["${lower(replace(random_id.third.b64_url, "_", "-"))}", "${random_pet.third.id}"])
     #vim s3.tf
     #terraform apply
     #terraform state list
     #aws s3api list-buckets
 Create an output block to return the names of the buckets created.
     #terraform console
-        #aws_s3_bucket.second
-        #values(aws_s3_bucket.second)[*].id
+        #aws_s3_bucket.third
+        #values(aws_s3_bucket.third)[*].id
     #vim output.tf
     #terraform apply
-    #terraform output mys3_id_second
+    #terraform output mys3_id_third
     #aws s3api list-buckets
 We will look at random_uuid later.
 
@@ -151,24 +167,77 @@ If you had followed along with you would have created 3 buckets without any terr
 But there is fault that was hidden while terraform apply after each minor change. Lets uncover this fault
     #terraform destroy
     #terraform apply
-Terraform apply will fail due to error at for_each of second aws_s3_buckets resource
-When arguments of a resource refers to other resource attributes, this would be considered as an implicit dependency.
+Terraform apply will fail due to error at for_each of third aws_s3_buckets resource.
+Arguments of a resource are allowed to refer attributes of other resources, this would be considered as an implicit dependency.
 Terraform would delay the creation of the downstream dependent resource untill the upstream resource is created/modified and its attributes become available.
-But terraform plan/apply fails this time when for_each the meta-argument is referring to resource attributes. Why?
-(for_each + each.key) and (count + count.index) are evaluated before the creation of the dependency graph.
-Their evaluation decides what the names and labels of the resources must be, without which is dependency graph will be incomplete.
-To correct this we replace the set in for_each with a map of known/static keys. Defining the map as a local.id_map_second will improve code readability.
-    #terraform console
-        #toset(["${lower(replace(random_id.second.b64_url, "_", "-"))}", "${random_pet.second.id}"])
-        #tomap({ second_id = "${lower(replace(random_id.second.b64_url, "_", "-"))}", second_pet = "${random_pet.second.id}" })
-    #vim s3.tf
-Even though we switched from a set to a map in aws_s3_bucket.second, the expression of the value in output.mys3_id_second doesnt need updates
-    #terraform apply
-    #terraform state list
-    #aws s3api list-buckets
-    #terraform output
+But terraform plan/apply fails here, when for_each the meta-argument is referring to resource attributes. Why?
+(for_each + each.key) and (count + count.index) are evaluated and must be known before the creation of the dependency graph.
+Their result decides what the names and labels of the resources must be, without which is dependency graph will be incomplete.
+There are 3 solutions for this for_each error.
+  Solution 1 : Avoid for_each
+    We could create 2 seperate aws_s3_bucket blocks. One of them would get bucket name from random_id, and the Next one would use random_pet.
+    I wont use this as it too simple for my taste.
+  Solution 2 : Map of static keys:
+    To correct the error we replace the set in for_each with a map of known/static keys.
+        #terraform destroy
+        #terraform console
+            #toset(["${lower(replace(random_id.third.b64_url, "_", "-"))}", "${random_pet.third.id}"])
+            #tomap({ third_id = "${lower(replace(random_id.third.b64_url, "_", "-"))}", third_pet = "${random_pet.third.id}" })
+    Defining the map as a local will improve code readability. Name of the bucket should now be each.value
+        #vim s3.tf
+        #terraform apply
+    Even though we switched from a set to a map in aws_s3_bucket.third, the value of output.mys3_id_third works with the same expression.
+        #terraform state list
+        #aws s3api list-buckets
+        #terraform output
+  Solution 3 : Count of known length
+    Another solution is to replace the "for_each = toset()" with count whose value is the length of a list.
+        #terraform destroy
+        #terraform console
+            #toset(["${lower(replace(random_id.third.b64_url, "_", "-"))}", "${random_pet.third.id}"])
+            #length(tolist(["${lower(replace(random_id.third.b64_url, "_", "-"))}", "${random_pet.third.id}"]))
+    Define the list as a local. Set the count as length(local.list) and the name of buckets as list items at count.index
+        #vim s3.tf
+        #terraform apply
+    The value of output.mys3_id_third no longer needs the values() funtion.
+        #terraform console
+            #aws_s3_bucket.third[*].id
+        #vim output.tf
+        #terraform apply
+        #terraform state list
+        #aws s3api list-buckets
+        #terraform output
+Your choice on Solution 2 or 3 should depend on if your preferece of named vs numbered terraform resource maps. I prefer number so i choose solution 3.
 
-OR a count list with known length.
+We will be trying out random_uuid, bucket versioning and uploading into bucket soon.
+But before that, I want to address a logical issue with the project so far.
+To create a bucket with a unique name and we have used 3 methods.
+And this resulted in the creation of three unique buckets, where we only needed one.
+We need to be able choose one of three suffix methods to create one bucket.
+Conditional Expression is our solution https://developer.hashicorp.com/terraform/language/expressions/conditionals.
+Create a string type variable that enables us to choose the kind of suffix.
+Apply a validation condition so that an error_message is shown for requests of unknown suffix_type. https://developer.hashicorp.com/terraform/language/validate
+The contains function allows us to define a list of allowed suffix_type, ie, [all, none, time, words, string]. https://developer.hashicorp.com/terraform/language/functions/contains
+    #vim variables.tf
+    #terraform console
+        #var.suffix_type
+We use condition expression to check var.suffix_type. If it matches a keyword, return 1, else return 0.
+    #terraform console
+        #var.suffix_type=="none" ? true : false
+        #var.suffix_type=="none" ? "on" : "off"
+        #var.suffix_type=="none" ? 1 : 0
+        #var.suffix_type=="string"||var.suffix_type=="all" ? 1 : 0
+        #var.suffix_type=="words"||var.suffix_type=="all" ? 1 : 0
+        #(var.suffix_type=="time"||var.suffix_type=="all") ? 1 : 0
+As I plan to use count to process the conditional expression, I have used the numbers 1 and 0 as true_val and false_val.
+You could use for_each to process the conditional expression, then use strings "on" and "off" as true_val and false_val.
+We define count in aws_s3_bucket.first, aws_s3_bucket.second, random_id.third, random_pet.third to use their respective conditional expression.
+Uncomment aws_s3_bucket.first and update its arguments to use var.mys3_prefix, var.bucket_force_destroy and var.bucket_extra_tags. Create an output block as well.
+As a consequence of using count, the 4 individual resource objects have become 4 lists of objects with just one element each
+So, update the values of output.mys3_id_first, output.mys3_id_second and local.id_list_third to use the 0th element of their resources.
+    #vim s3.tf
+We have not applied conditional expression in aws_s3_bucket.third because it is implicitly dependent on random_id and random_pet
+
 
 
 

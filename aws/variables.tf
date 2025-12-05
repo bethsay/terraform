@@ -13,3 +13,22 @@ variable "bucket_extra_tags" {
   default = {}
 }
 
+variable "suffix_string_length" {
+  type = number
+  default = 7
+}
+
+variable "suffix_word_count" {
+  type = number
+  default = 3
+}
+
+variable "suffix_type" {
+  type = string
+  default = "all"
+  validation {
+    condition = contains(["all", "none", "time", "words", "string"], var.suffix_type)
+    error_message = "Choose one : \"all\", \"none\", \"time\", \"words\", \"string\""
+  }
+}
+

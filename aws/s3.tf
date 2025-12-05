@@ -1,46 +1,58 @@
 resource "aws_s3_bucket" "first" {
-  # # bucket = "tf-bucket"
+  # bucket = "tf-bucket"
+  bucket = var.mys3_prefix
+  force_destroy = var.bucket_force_destroy
+  tags = var.bucket_extra_tags
+  count = var.suffix_type=="none" ? 1 : 0
+}
+
+resource "aws_s3_bucket" "second" {
   # bucket_prefix =  "tf-bucket-"
   # force_destroy = true
   # tags = { another = "temp", env = "temp" }
   bucket_prefix =  local.mys3_prefix_hyphen
   force_destroy = var.bucket_force_destroy
   tags = var.bucket_extra_tags
-  # count = var.bool ? length (var.set) : 0
+  count = (var.suffix_type=="time"||var.suffix_type=="all") ? 1 : 0
 }
 
 locals { mys3_prefix_hyphen = "${var.mys3_prefix}-" }
 
-resource "random_id" "second" {
-  # count = 0
-  byte_length = 7
+resource "random_id" "third" {
+  byte_length = var.suffix_string_length
   prefix = local.mys3_prefix_hyphen
+  count = (var.suffix_type=="string"||var.suffix_type=="all") ? 1 : 0
 }
 
-resource "random_pet" "second" {
-  length = 3
+resource "random_pet" "third" {
+  length = var.suffix_word_count
   prefix = var.mys3_prefix
+  count = (var.suffix_type=="word"||var.suffix_type=="all") ? 1 : 0
 }
 
-resource "aws_s3_bucket" "second" {
-  # # for_each = toset(["${lower(replace(random_id.second.b64_url, "_", "-"))}", "${random_pet.second.id}"])
+resource "aws_s3_bucket" "third" {
+  # # for_each = toset(["${lower(replace(random_id.third.b64_url, "_", "-"))}", "${random_pet.third.id}"])
   # # bucket = each.key
-  for_each = local.id_map_second
-  bucket = each.value
-  # count = length(local.id_list_second)
-  # bucket = local.id_list_second[count.index]
+  # for_each = local.id_map_third
+  # bucket = each.value
+  count = length(local.id_list_third)
+  bucket = local.id_list_third[count.index]
   force_destroy = var.bucket_force_destroy
+  tags = var.bucket_extra_tags
 }
 
 locals {
-  id_list_second = tolist(["${lower(replace(random_id.second.b64_url, "_", "-"))}", "${random_pet.second.id}"])
-  id_map_second = tomap({
-    second_id = "${lower(replace(random_id.second.b64_url, "_", "-"))}"
-    second_pet = "${random_pet.second.id}"
-  })
+  # id_map_third = tomap({
+  #   third_id = "${lower(replace(random_id.third[0].b64_url, "_", "-"))}"
+  #   third_pet = "${random_pet.third[0].id}"
+  # })
+  id_list_third = tolist([
+    "${try(lower(replace(random_id.third[0].b64_url, "_", "-")), null)}",
+    "${try(random_pet.third[0].id, null)}",
+  ])
 }
 
-resource "random_uuid" "third" {}
+resource "random_uuid" "fourth" {}
 #
 # data "external" "third" {
 #   for_each = toset(["${local.mys3}", ])
@@ -56,15 +68,15 @@ resource "random_uuid" "third" {}
 #
 # locals {
 #   mys3_unique = setunion(
-#     [try(lower(random_id.second[*].b64_url),[])],
-#     [random_pet.second.id],
+#     [try(lower(random_id.third[*].b64_url),[])],
+#     [random_pet.third.id],
 #     ["${local.mys3}-${random_uuid.third.result}"],
 #     formatlist("%s-%s", local.mys3, values(data.external.third)[*].result.uuid_part)
 #   )
 # }
 #
 # locals {
-#   s3_set = setunion([aws_s3_bucket.first.id],values(aws_s3_bucket.second)[*].id,values(aws_s3_bucket.third)[*].id)
+#   s3_set = setunion([aws_s3_bucket.second.id],values(aws_s3_bucket.third)[*].id,values(aws_s3_bucket.third)[*].id)
 # }
 #
 # resource "aws_s3_bucket_versioning" "all" {
