@@ -71,7 +71,8 @@ Create your first S3 bucket using the aws_s3_bucket resource with only its bucke
 If the bucket name is not globally unique, you will see errors like "BucketAlreadyExists" or "Header malformed : Wrong region"
 Disable/Comment-out the first aws_s3_bucket resource.
 Create the second aws_s3_bucket resource with bucket_prefix argument.
-The bucket_prefix argument, guarentees uniqueness by appending a 26 digit number to it.
+The bucket_prefix argument, guarantees uniqueness by appending a 26 digit number to it.
+If bucket and bucket_prefix are not used, the word "terraform" is used as bucket_prefix.
 The terraform aws provider generates a time based unique random number that has the format YYYYMMDDhhmmssXXXX00000001.
 Include a hyphen at the end of the prefix so that the bucket_name looks nice.
 Use the force_destroy argument so that we can still destroy or recreate even if bucket is not empty or is processing uploads/downloads.
@@ -225,18 +226,55 @@ We use condition expression to check var.suffix_type. If it matches a keyword, r
     #terraform console
         #var.suffix_type=="none" ? true : false
         #var.suffix_type=="none" ? "on" : "off"
+        #var.suffix_type=="none" ? toset(["on"]) : toset([])
         #var.suffix_type=="none" ? 1 : 0
         #var.suffix_type=="string"||var.suffix_type=="all" ? 1 : 0
         #var.suffix_type=="words"||var.suffix_type=="all" ? 1 : 0
         #(var.suffix_type=="time"||var.suffix_type=="all") ? 1 : 0
-As I plan to use count to process the conditional expression, I have used the numbers 1 and 0 as true_val and false_val.
-You could use for_each to process the conditional expression, then use strings "on" and "off" as true_val and false_val.
-We define count in aws_s3_bucket.first, aws_s3_bucket.second, random_id.third, random_pet.third to use their respective conditional expression.
-Uncomment aws_s3_bucket.first and update its arguments to use var.mys3_prefix, var.bucket_force_destroy and var.bucket_extra_tags. Create an output block as well.
-As a consequence of using count, the 4 individual resource objects have become 4 lists of objects with just one element each
-So, update the values of output.mys3_id_first, output.mys3_id_second and local.id_list_third to use the 0th element of their resources.
+        #(var.suffix_type=="all") ? 2 : ((var.suffix_type=="words"||var.suffix_type=="string") ? 1 : 0)
+I prefer count to process conditional expressions. So, I will use 1 as true_val and 0 as false_val.
+for_each can also process conditional expressions. If used, toset([]), ie, an empty set must be used as false_val
+Uncomment aws_s3_bucket.first and update its arguments to use var.mys3_prefix, var.bucket_force_destroy and var.bucket_extra_tags.
     #vim s3.tf
-We have not applied conditional expression in aws_s3_bucket.third because it is implicitly dependent on random_id and random_pet
+Create an output block to return the bucket name of aws_s3_bucket.first as well.
+    #vim output.tf
+We define count in aws_s3_bucket.first, aws_s3_bucket.second, random_id.third, random_pet.third to use their respective conditional expression.
+    #vim s3.tf
+Conditional expression in aws_s3_bucket.third will be applied after some considerations.
+    #terraform plan
+    #terraform plan -var 'suffix_type=none'
+Because of this change, the 4 individual resource objects have become 4 lists of objects that contain a singluar element or might be empty.
+Also, evaluating expressions on resources that may or may not exist will causes errors during terraform plan/apply. We a error handling function
+Try function handles mutiple expressions and will have the result of the first expression that doesnt fail. https://developer.hashicorp.com/terraform/language/functions/try
+Avoid using the splat operator (ie [*] or wildcard) when you know the list will ever have only one element.
+Pass the current expressions of output.mys3_id_first, output.mys3_id_second and local.id_list_third as the primary to the try function.
+Update the primary expression of all try functions to evaluate the 0th element of their upstream resources.
+And set null as the secondary/fallback expression in each try function.
+    #vim s3.tf
+    #vim output.tf
+    #terraform plan
+    #terraform plan -var 'suffix_type=none'
+Even when suffix_type=none, you will see aws_s3_bucket.third is planning to create 2 buckets without names.
+This is because even though random_id.third, random_pet.third are switched off, local.id_list_third has a length of 2 with null elements.
+We need count to be 2 when suffix_type is all, 1 when suffix_type is words or string, 0 when suffix_type is none or unknown
+    #terraform console
+        #(var.suffix_type=="all") ? 2 : ((var.suffix_type=="words"||var.suffix_type=="string") ? 1 : 0)
+    #vim s3.tf
+Also use compact function to remove null from local.id_list_third. https://developer.hashicorp.com/terraform/language/functions/compact
+Now, aws_s3_bucket.third can use the random_pet.third.id as suffix when count is 1 instead of bucket name being empty.
+    #vim s3.tf
+    #terraform apply
+    #terraform apply -var 'suffix_type=words'
+    #terraform apply -var 'suffix_type=string'
+    #terraform apply -var 'suffix_type=time'
+When using words or string suffix_type, you would see output.mys3_id_second and output.mys3_id_first do not exist. Its because try function uses null.
+Using null as a fallback for output.mys3_id_third wont work as try function does not recognise an empty list of objects as a failure/error.
+A conditional expression can apply null as values if the length of aws_s3_bucket.third is 0
+    #terraform console
+        #length(aws_s3_bucket.third)==0 ? null : aws_s3_bucket.third[*].id
+        #length(aws_s3_bucket.third)>0 ? aws_s3_bucket.third[*].id : null
+    #vim output.tf
+    #terraform apply -var 'suffix_type=time'
 
 
 
