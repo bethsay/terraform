@@ -27,8 +27,13 @@ variable "suffix_type" {
   type = string
   default = "all"
   validation {
-    condition = contains(["all", "none", "time", "words", "string"], var.suffix_type)
-    error_message = "Choose one : \"all\", \"none\", \"time\", \"words\", \"string\""
+    condition = contains(
+      [ "all", "none", "time", "string", "words",
+        "uuid", "uuidv5_int", "uuidv5_ext",
+      ],
+      var.suffix_type
+    )
+    error_message = "Choose one : \"all\", \"none\", \"time\", \"string\", \"words\", \"uuid\", \"uuidv5_int\", \"uuidv5_ext\","
   }
 }
 

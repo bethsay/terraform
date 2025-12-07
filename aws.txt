@@ -170,7 +170,7 @@ But there is fault that was hidden while terraform apply after each minor change
     #terraform apply
 Terraform apply will fail due to error at for_each of third aws_s3_buckets resource.
 Arguments of a resource are allowed to refer attributes of other resources, this would be considered as an implicit dependency.
-Terraform would delay the creation of the downstream dependent resource untill the upstream resource is created/modified and its attributes become available.
+Terraform would delay the creation of the downstream dependent resource until the upstream resource is created/modified and its attributes become available.
 But terraform plan/apply fails here, when for_each the meta-argument is referring to resource attributes. Why?
 (for_each + each.key) and (count + count.index) are evaluated and must be known before the creation of the dependency graph.
 Their result decides what the names and labels of the resources must be, without which is dependency graph will be incomplete.
@@ -208,7 +208,7 @@ There are 3 solutions for this for_each error.
         #terraform state list
         #aws s3api list-buckets
         #terraform output
-Your choice on Solution 2 or 3 should depend on if your preferece of named vs numbered terraform resource maps. I prefer number so i choose solution 3.
+Your choice on Solution 2 or 3 should depend on your preference of named vs numbered terraform resource object. I prefer number so I choose solution 3.
 
 We will be trying out random_uuid, bucket versioning and uploading into bucket soon.
 But before that, I want to address a logical issue with the project so far.
@@ -231,9 +231,8 @@ We use condition expression to check var.suffix_type. If it matches a keyword, r
         #var.suffix_type=="string"||var.suffix_type=="all" ? 1 : 0
         #var.suffix_type=="words"||var.suffix_type=="all" ? 1 : 0
         #(var.suffix_type=="time"||var.suffix_type=="all") ? 1 : 0
-        #(var.suffix_type=="all") ? 2 : ((var.suffix_type=="words"||var.suffix_type=="string") ? 1 : 0)
-I prefer count to process conditional expressions. So, I will use 1 as true_val and 0 as false_val.
-for_each can also process conditional expressions. If used, toset([]), ie, an empty set must be used as false_val
+I prefer count to evaluate conditional expressions. So, I will use 1 as true_val and 0 as false_val.
+for_each can also evaluate conditional expressions. If used, toset([]), ie, an empty set must be used as false_val
 Uncomment aws_s3_bucket.first and update its arguments to use var.mys3_prefix, var.bucket_force_destroy and var.bucket_extra_tags.
     #vim s3.tf
 Create an output block to return the bucket name of aws_s3_bucket.first as well.
@@ -264,9 +263,11 @@ Also use compact function to remove null from local.id_list_third. https://devel
 Now, aws_s3_bucket.third can use the random_pet.third.id as suffix when count is 1 instead of bucket name being empty.
     #vim s3.tf
     #terraform apply
+    #aws s3api list-buckets
     #terraform apply -var 'suffix_type=words'
     #terraform apply -var 'suffix_type=string'
     #terraform apply -var 'suffix_type=time'
+    #aws s3api list-buckets
 When using words or string suffix_type, you would see output.mys3_id_second and output.mys3_id_first do not exist. Its because try function uses null.
 Using null as a fallback for output.mys3_id_third wont work as try function does not recognise an empty list of objects as a failure/error.
 A conditional expression can apply null as values if the length of aws_s3_bucket.third is 0
@@ -275,8 +276,39 @@ A conditional expression can apply null as values if the length of aws_s3_bucket
         #length(aws_s3_bucket.third)>0 ? aws_s3_bucket.third[*].id : null
     #vim output.tf
     #terraform apply -var 'suffix_type=time'
+    #aws s3api list-buckets
 
-
+Lets look at generating uuids which we will later use as bucket suffix
+Lets create a bucket with random_uuid resource from the random provider. prefix argument in not supported.
+    #vim s3.tf
+Lets include "uuid" as suffix_type and use it enable or disable random_uuid.fourth
+    #vim variables.tf
+    #vim s3.tf
+    #terraform apply -var 'suffix_type=uuid'
+An inconvenience of the time, string, word, and uuid suffix is that the bucket name uniqueness came at the cost of predictability.
+If the bucket name had to be used by another team, they will have to wait for you perform an apply and share the output that has the bucket id.
+uuid version 5 operates on namespace and name inputs and will always generate the same uuid. https://developer.hashicorp.com/terraform/language/functions/uuidv5
+Lets generate uuid using the oid namespace for our var.mys3_prefix "tf-bucket" via linux bash shell and via terraform console.
+    #uuidgen -s -n @oid -N "tf-bucket"
+    #terraform console
+        #uuidv5("oid",var.mys3_prefix)
+We get the same 32-digit hex code as our uuid.
+Lets include "uuidv5_int" as suffix_type and use it as a condition to set local.uuidv5_int to use uuidv5 function or be null.
+    #vim variables.tf
+    #vim s3.tf
+    #terraform console
+        #local.uuidv5_int
+Although this is redundant, let us import the output of the bash command uuidgen into our terraform code.
+Using hashicorp/external provider allows us to use run external programs and use them as data sources. https://registry.terraform.io/providers/hashicorp/external/latest/docs
+    #vim providers.tf
+    #terraform init
+The result of the external data source must be json formated for terraform to be able to consume.
+    #uuidgen -s -n @oid -N "tf-bucket" | jq -R '{uuid_full: .}'
+Create a data source block to run uuidgen on mys3_prefix using bash. https://registry.terraform.io/providers/hashicorp/external/latest/docs/data-sources/external
+    #vim s3.tf
+Allow "uuidv5_ext" to be a valid suffix_type and use it to enable data.external.fourth
+    #vim variables.tf
+    #vim s3.tf
 
 
 

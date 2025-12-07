@@ -14,3 +14,7 @@ output "mys3_id_third"{
   value = length(aws_s3_bucket.third)>0 ? aws_s3_bucket.third[*].id : null
 }
 
+output "mys3_id_fourth"{
+  value = length(aws_s3_bucket.fourth)>0 ? aws_s3_bucket.fourth[*].id : null
+}
+

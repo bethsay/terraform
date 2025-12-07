@@ -57,13 +57,33 @@ locals {
   ]))
 }
 
-resource "random_uuid" "fourth" {}
-#
-# data "external" "third" {
-#   for_each = toset(["${local.mys3}", ])
-#   program = [ "/bin/bash", "-c", "uuidgen -s -n @oid -N \"${each.key}\" | jq -R ' . as $full | split(\"-\")[0] as $part | { uuid_full: $full, uuid_part: $part }'" ]
-# }
-#
+resource "random_uuid" "fourth" {
+  count = (var.suffix_type=="uuid"||var.suffix_type=="all") ? 1 : 0
+}
+
+locals {
+  uuidv5_int = (var.suffix_type=="uuidv5_int"||var.suffix_type=="all") ? uuidv5("oid",var.mys3_prefix) : null
+}
+
+data "external" "fourth" {
+  count = (var.suffix_type=="uuidv5_ext"||var.suffix_type=="all") ? 1 : 0
+  program = [ "/bin/bash", "-c", "uuidgen -s -n @oid -N \"${var.mys3_prefix}\" | jq -R '{uuidv5_ext: .}'" ]
+  # program = [ "/bin/bash", "-c", "uuidgen -s -n @oid -N \"${var.mys3_prefix}\" | jq -R ' . as $full | split(\"-\")[0] as $part | { uuid_full: $full, uuid_part: $part }'" ]
+}
+
+locals {
+  id_list_fourth = compact(tolist([
+    "${try(random_uuid.fourth[0].id, null)}",
+    "${try(data.external.fourth[0].result.uuidv5_ext, local.uuidv5_int, null)}",
+  ]))
+}
+
+resource "aws_s3_bucket" "fourth" {
+  count = (var.suffix_type=="all") ? 2 : ((startswith(var.suffix_type, "uuid")) ? 1 : 0)
+  bucket = "${var.mys3_prefix}-${local.id_list_fourth[count.index]}"
+  force_destroy = var.bucket_force_destroy
+  tags = var.bucket_extra_tags
+}
 # resource "aws_s3_bucket" "third" {
 #   # for_each = toset([ "${random_uuid.third.result}", "${data.external.third["${local.mys3}"].result.uuid_full}" ])
 #   for_each = setunion([random_uuid.third.result],values(data.external.third)[*].result.uuid_part)
