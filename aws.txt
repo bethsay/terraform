@@ -276,6 +276,7 @@ A conditional expression can apply null as values if the length of aws_s3_bucket
         #length(aws_s3_bucket.third)>0 ? aws_s3_bucket.third[*].id : null
     #vim output.tf
     #terraform apply -var 'suffix_type=time'
+    #terraform output mys3_id_third
     #aws s3api list-buckets
 
 Lets look at generating uuids which we will later use as bucket suffix
@@ -285,6 +286,7 @@ Lets include "uuid" as suffix_type and use it enable or disable random_uuid.four
     #vim variables.tf
     #vim s3.tf
     #terraform apply -var 'suffix_type=uuid'
+    #terraform state show random_uuid.fourth[0]
 An inconvenience of the time, string, word, and uuid suffix is that the bucket name uniqueness came at the cost of predictability.
 If the bucket name had to be used by another team, they will have to wait for you perform an apply and share the output that has the bucket id.
 uuid version 5 operates on namespace and name inputs and will always generate the same uuid. https://developer.hashicorp.com/terraform/language/functions/uuidv5
@@ -296,10 +298,10 @@ We get the same 32-digit hex code as our uuid.
 Lets include "uuidv5_int" as suffix_type and use it as a condition to set local.uuidv5_int to use uuidv5 function or be null.
     #vim variables.tf
     #vim s3.tf
-    #terraform console
+    #terraform console -var 'suffix_type=uuidv5_int'
         #local.uuidv5_int
-Although this is redundant, let us import the output of the bash command uuidgen into our terraform code.
-Using hashicorp/external provider allows us to use run external programs and use them as data sources. https://registry.terraform.io/providers/hashicorp/external/latest/docs
+If uuidv5 or some other processing you need is not availble within terraform, we have the option to run it and import its result.
+Using hashicorp/external provider allows us to specify the program and use its result as a data source. https://registry.terraform.io/providers/hashicorp/external/latest/docs
     #vim providers.tf
     #terraform init
 The result of the external data source must be json formated for terraform to be able to consume.
@@ -309,7 +311,52 @@ Create a data source block to run uuidgen on mys3_prefix using bash. https://reg
 Allow "uuidv5_ext" to be a valid suffix_type and use it to enable data.external.fourth
     #vim variables.tf
     #vim s3.tf
+    #terraform apply -var 'suffix_type=uuidv5_ext'
+    #terraform state show data.external.fourth[0]
+Now lets create buckets using these uuids
+Create a local.id_list_fourth that tries to get random_uuid.fourth[0].id, data.external.fourth[0].id and local.uuidv5_int, uses them as list elements and compacts it.
+    #terraform console
+        #tolist([ "${try(random_uuid.fourth[0].id, null)}", "${try(local.uuidv5_int, null)}", "${try(data.external.fourth[0].result.uuidv5_ext, null)}" ])
+Actually data.external.fourth[0].id and local.uuidv5_int are the same and local.uuidv5_int already fallback to null. So combine these 2.
+    #terraform console
+        #tolist(["${try(random_uuid.fourth[0].id, null)}", "${try(data.external.fourth[0].result.uuidv5_ext, local.uuidv5_int)}" ])
+    #vim s3.tf
+Create a aws_s3_bucket resource that creates 2 buckets if suffix_type is all or 1 bucket is suffix_type starts with uuid.
+Use local.id_list_fourth elements with mys3_prefix_hyphen as the bucket argument. Also include the tags and force_destroy arguments.
+    #vim s3.tf
+    #terraform apply -var 'suffix_type=uuid'
+    #aws s3api list-buckets
+Create output block to return the list of created bucket names if aws_s3_bucket has created any
+    #terraform console
+        #length(aws_s3_bucket.fourth)>0 ? aws_s3_bucket.fourth[*].id : null
+    #terraform apply -var 'suffix_type=uuidv5_ext'
+    #terraform output mys3_id_fourth
+    #terraform apply
+    #aws s3api list-buckets
 
+Improvement task:
+What if the 32 digit uuid is too big or not pretty enough to be used as bucket name?
+You can split it into 5 elements of 8-4-4-4-12 digits and use the first_block or last_block as suffix
+You can also remove the hyphens and count any number of digits from the front or back and us that as suffix for your bucket.
+You may use this bash command as your uuidv5_ext and maybe figure out the same results for uuidv5_int and random uuid.
+    #uuidgen -s -n @oid -N "tf-bucket" | jq -R \
+      '{
+          uuidv5_ext_full: .,
+          uuidv5_ext_fblock: (split("-")[0]),
+          uuidv5_ext_lblock: (split("-")[4]),
+          uuidv5_ext_fcount: (gsub("-"; "")[:6]),
+          uuidv5_ext_bcount: (gsub("-"; "")[-6:]),
+      }'
+Figure out the terraform functions you would use to do the same conversions for local.uuidv5_int and random_uuid.fourth
+
+Now lets enable versioning on any/all buckets that we create.
+First lets have a variable bucket_versioning created with default value of true.
+    #vim variables.tf
+Next we need to create a local to hold a list/set of any/all bucket names.
+As we need to combine 2 strings with 2 lists, we will use setunion function with compact. https://developer.hashicorp.com/terraform/language/functions/setunion
+    #vim s3.tf
+    #aws s3api list-buckets | jq -r '.Buckets[].Name'
+    #aws s3api list-buckets | jq -r '.Buckets[].Name' | xargs -L 1 aws s3api get-bucket-versioning --bucket
 
 
 Using aws_s3_bucket_versioning, we will enable versioning.

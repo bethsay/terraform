@@ -33,25 +33,25 @@ resource "random_pet" "third" {
 resource "aws_s3_bucket" "third" {
   # # # for_each = toset(["${lower(replace(random_id.third.b64_url, "_", "-"))}", "${random_pet.third.id}"])
   # # # bucket = each.key
-  # # for_each = local.id_map_third
+  # # for_each = local.mys3_id_map_third
   # # bucket = each.value
-  # count = length(local.id_list_third)
+  # count = length(local.mys3_id_list_third)
   count = (var.suffix_type=="all") ? 2 : ((var.suffix_type=="words"||var.suffix_type=="string") ? 1 : 0)
-  bucket = local.id_list_third[count.index]
+  bucket = local.mys3_id_list_third[count.index]
   force_destroy = var.bucket_force_destroy
   tags = var.bucket_extra_tags
 }
 
 locals {
-  # id_map_third = tomap({
+  # mys3_id_map_third = tomap({
   #   third_id = "${lower(replace(random_id.third.b64_url, "_", "-"))}"
   #   third_pet = "${random_pet.third.id}"
   # })
-  # id_list_third = tolist([
+  # mys3_id_list_third = tolist([
   #   "${lower(replace(random_id.third.b64_url, "_", "-"))}",
   #   "${random_pet.third.id}",
   # ])
-  id_list_third = compact(tolist([
+  mys3_id_list_third = compact(tolist([
     "${try(lower(replace(random_id.third[0].b64_url, "_", "-")), null)}",
     "${try(random_pet.third[0].id, null)}",
   ]))
@@ -68,49 +68,38 @@ locals {
 data "external" "fourth" {
   count = (var.suffix_type=="uuidv5_ext"||var.suffix_type=="all") ? 1 : 0
   program = [ "/bin/bash", "-c", "uuidgen -s -n @oid -N \"${var.mys3_prefix}\" | jq -R '{uuidv5_ext: .}'" ]
-  # program = [ "/bin/bash", "-c", "uuidgen -s -n @oid -N \"${var.mys3_prefix}\" | jq -R ' . as $full | split(\"-\")[0] as $part | { uuid_full: $full, uuid_part: $part }'" ]
 }
 
 locals {
-  id_list_fourth = compact(tolist([
+  suffix_list_fourth = compact(tolist([
     "${try(random_uuid.fourth[0].id, null)}",
-    "${try(data.external.fourth[0].result.uuidv5_ext, local.uuidv5_int, null)}",
+    "${try(data.external.fourth[0].result.uuidv5_ext, local.uuidv5_int)}",
   ]))
 }
 
 resource "aws_s3_bucket" "fourth" {
   count = (var.suffix_type=="all") ? 2 : ((startswith(var.suffix_type, "uuid")) ? 1 : 0)
-  bucket = "${var.mys3_prefix}-${local.id_list_fourth[count.index]}"
+  bucket = "${local.mys3_prefix_hyphen}${local.suffix_list_fourth[count.index]}"
   force_destroy = var.bucket_force_destroy
   tags = var.bucket_extra_tags
 }
-# resource "aws_s3_bucket" "third" {
-#   # for_each = toset([ "${random_uuid.third.result}", "${data.external.third["${local.mys3}"].result.uuid_full}" ])
-#   for_each = setunion([random_uuid.third.result],values(data.external.third)[*].result.uuid_part)
-#   bucket = "${local.mys3}-${each.key}"
-#   force_destroy = true
-# }
-#
-# locals {
-#   mys3_unique = setunion(
-#     [try(lower(random_id.third[*].b64_url),[])],
-#     [random_pet.third.id],
-#     ["${local.mys3}-${random_uuid.third.result}"],
-#     formatlist("%s-%s", local.mys3, values(data.external.third)[*].result.uuid_part)
-#   )
-# }
-#
-# locals {
-#   s3_set = setunion([aws_s3_bucket.second.id],values(aws_s3_bucket.third)[*].id,values(aws_s3_bucket.third)[*].id)
-# }
-#
-# resource "aws_s3_bucket_versioning" "all" {
-#   for_each = local.s3_set
-#   bucket = each.key
-#   versioning_configuration {
-#     status = "Enabled"
-#   }
-# }
+
+locals {
+  mys3_id_all = compact(setunion(
+    [try(aws_s3_bucket.first[0].id, null)],
+    [try(aws_s3_bucket.second[0].id, null)],
+    aws_s3_bucket.third[*].id,
+    aws_s3_bucket.fourth[*].id
+  ))
+}
+
+resource "aws_s3_bucket_versioning" "all" {
+  count = (var.bucket_versioning && var.suffix_type=="all") ? 5 : ( var.bucket_versioning ? 1 : 0)
+  bucket = local.mys3_id_all[count.index]
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
 #
 # locals {
 #   s3_upload_set = setproduct(local.s3_set, fileset("../", "*.txt"))

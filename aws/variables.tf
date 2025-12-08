@@ -37,3 +37,7 @@ variable "suffix_type" {
   }
 }
 
+variable "bucket_versioning" {
+  type = bool
+  default = true
+}
