@@ -55,6 +55,7 @@ locals {
     "${try(lower(replace(random_id.third[0].b64_url, "_", "-")), null)}",
     "${try(random_pet.third[0].id, null)}",
   ]))
+  # mys3_count_all = 1+2            # time+words+string
 }
 
 resource "random_uuid" "fourth" {
@@ -85,30 +86,34 @@ resource "aws_s3_bucket" "fourth" {
 }
 
 locals {
+  mys3_count_all = 1+2+2          # time+words+string+uuid+uuidv5_int
   mys3_id_all = compact(setunion(
     [try(aws_s3_bucket.first[0].id, null)],
     [try(aws_s3_bucket.second[0].id, null)],
     aws_s3_bucket.third[*].id,
     aws_s3_bucket.fourth[*].id
   ))
+  bucket_versioning_count_check = (var.bucket_versioning && var.suffix_type=="all") ? local.mys3_count_all : ( var.bucket_versioning ? 1 : 0)
 }
 
 resource "aws_s3_bucket_versioning" "all" {
-  count = (var.bucket_versioning && var.suffix_type=="all") ? 5 : ( var.bucket_versioning ? 1 : 0)
+  count = local.bucket_versioning_count_check
   bucket = local.mys3_id_all[count.index]
   versioning_configuration {
     status = "Enabled"
   }
 }
-#
-# locals {
-#   s3_upload_set = setproduct(local.s3_set, fileset("../", "*.txt"))
-# }
-#
-# resource "aws_s3_object" "all" {
-#   count = length(local.s3_upload_set)
-#   bucket = tolist(tolist(local.s3_upload_set)[count.index])[0]
-#   key = "docs/${tolist(tolist(local.s3_upload_set)[count.index])[1]}"
-#   source = "../${tolist(tolist(local.s3_upload_set)[count.index])[1]}"
-# }
-#
+
+locals {
+  bucket_upload_set = setproduct(local.mys3_id_all, var.bucket_upload)
+  bucket_upload_count_max = local.mys3_count_all*length(var.bucket_upload)
+  bucket_upload_count_check = (length(var.bucket_upload)>0 && var.suffix_type=="all") ? local.bucket_upload_count_max : (length(var.bucket_upload)>0 ? 1 : 0)
+}
+
+resource "aws_s3_object" "all" {
+  count = bucket_upload_count_check
+  bucket = tolist(tolist(local.bucket_upload_set)[count.index])[0]
+  key = "docs/${tolist(tolist(local.bucket_upload_set)[count.index])[1]}"
+  source = "../${tolist(tolist(local.bucket_upload_set)[count.index])[1]}"
+}
+

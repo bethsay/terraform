@@ -332,7 +332,8 @@ Create output block to return the list of created bucket names if aws_s3_bucket 
     #terraform apply -var 'suffix_type=uuidv5_ext'
     #terraform output mys3_id_fourth
     #terraform apply
-    #aws s3api list-buckets
+    #aws s3api list-buckets --output table
+    #terraform destroy
 
 Improvement task:
 What if the 32 digit uuid is too big or not pretty enough to be used as bucket name?
@@ -352,32 +353,36 @@ Figure out the terraform functions you would use to do the same conversions for 
 Now lets enable versioning on any/all buckets that we create.
 First lets have a variable bucket_versioning created with default value of true.
     #vim variables.tf
-Next we need to create a local to hold a list/set of any/all bucket names.
+    #terraform console
+        #var.bucket_versioning
+Although versioning is an argument in aws_s3_bucket resource, terraform has depreciated it as it cannot detect state drift for this attribute/argument.
+Using aws_s3_bucket_versioning resource is the recomended methods to enable/disable versioning.
+Create a local to hold a list of any/all bucket names to be cycled in the bucket argument in aws_s3_bucket_versioning.
 As we need to combine 2 strings with 2 lists, we will use setunion function with compact. https://developer.hashicorp.com/terraform/language/functions/setunion
+    #terraform console
+        #setunion([try(aws_s3_bucket.first[0].id, null)], [try(aws_s3_bucket.second[0].id, null)], aws_s3_bucket.third[*].id, aws_s3_bucket.fourth[*].id)
+        #compact(setunion([try(aws_s3_bucket.first[0].id, null)], [try(aws_s3_bucket.second[0].id, null)], aws_s3_bucket.third[*].id, aws_s3_bucket.fourth[*].id))
     #vim s3.tf
-    #aws s3api list-buckets | jq -r '.Buckets[].Name'
-    #aws s3api list-buckets | jq -r '.Buckets[].Name' | xargs -L 1 aws s3api get-bucket-versioning --bucket
-
-
-Using aws_s3_bucket_versioning, we will enable versioning.
+Create the aws_s3_bucket_versioning resource. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_versioning.
+Set count to 5 if var.suffix_type is all (time+word+string+uuid+uuidv5) and var.bucket_versioning is true.
+Set count to 1 if var.bucket_versioning is true else set count to 0. No need to check what type of suffix you have chosen.
+Set bucket to cycle through local.mys3_id_all. Create versioning_configuration argument block and set status as Enabled.
     #vim s3.tf
-Or you could generate a UUID and append it to your bucket name. This is an AWS recommendion for naming resources.
-    #uuidgen -s -n @oid -N "my-s3-bucket-name" | cut -d '-' -f 1
-Create the resources and check if they have been created via console or cli
     #terraform apply
-    #terraform state list
-    #aws s3api list-buckets
-    #aws s3api get-bucket-versioning --bucket <bucket_name>
+    #aws s3api get-bucket-versioning help
+    #aws s3api list-buckets | jq -r '.Buckets[].Name'
+    #aws s3api list-buckets | jq -r '.Buckets[].Name' | xargs -L 1 aws s3api get-bucket-versioning --output text --bucket
+    #terraform apply -var 'bucket_versioning=false'
+    #aws s3api list-buckets | jq -r '.Buckets[].Name' | xargs -L 1 aws s3api get-bucket-versioning --output text --bucket
+    #terraform apply -var 'suffix_type=uuidv5_int'
+    #aws s3api list-buckets | jq -r '.Buckets[].Name'
+    #aws s3api list-buckets | jq -r '.Buckets[].Name' | xargs -L 1 aws s3api get-bucket-versioning --output text --bucket
+    #terraform destroy
 
+We will be using this project as a child_module in other terraform_aws projects to prepare backends.
+But before that, lets look basic functionality of s3 buckets,ie to store files.
+Create a variable bucket_upload which should accept a list of files. Default value should be an emptyset.
 
-Lets use S3 for maintaining the backend of our aws terraform projects. https://developer.hashicorp.com/terraform/language/backend/s3
-If backend config is changed, you will have to perform init again.
-To ignore previous
-    #terraform init -reconfigure
-To migrate-state
-    #terraform init -force-copy
-
-    #vim .terraformrc
 
 Using the aws_s3_object resource lets upload files into this S3 bucket.
 The bucket argument will be the destination of our file upload.
@@ -388,6 +393,18 @@ Create the resources and check if they have been created via console or cli
     #terraform apply
     #terraform state list
     #aws s3api list-objects-v2 --bucket <bucket_name>
+    #terraform apply -var 'bucket_upload=[$(ls ../*.txt| tr '\n' ',')]'
+    #ls ../*.txt| paste -sd,| xargs -I?? terraform apply -var 'bucket_upload=[??]'
+
+Lets use S3 for maintaining the backend of our aws terraform projects. https://developer.hashicorp.com/terraform/language/backend/s3
+If backend config is changed, you will have to perform init again.
+To ignore previous
+    #terraform init -reconfigure
+To migrate-state
+    #terraform init -force-copy
+
+    #vim .terraformrc
+
 
 The .terraform folder contains the the plugin of the aws provider, which takes up 750Mb of disk space.
 

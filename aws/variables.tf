@@ -41,3 +41,9 @@ variable "bucket_versioning" {
   type = bool
   default = true
 }
+
+variable "bucket_upload" {
+  type = list(string)
+  default = []
+}
+
