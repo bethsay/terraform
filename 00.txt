@@ -367,8 +367,8 @@ If an parameter/argument of any function/expression is a terraform resource, its
 If output.items is using the slice or element+chunklist operation, terraform plan/apply will fail with an error if it is followed by a destroy.
     #terraform destroy
     #terraform apply -var-file values.txt
-The fileset funtion can be used as is in output.items and be used with length funtion in output.count.
-But to get an accurate value when working with dynamic files in terraform, perform operations/funtions on the local_file resource instead of fileset.
+The fileset function can be used as is in output.items and be used with length function in output.count.
+But to get an accurate value when working with dynamic files in terraform, perform operations/functions on the local_file resource instead of fileset.
 Change the values of output.count and output.items back to sum of lengths of local_files and basename of local_file
     #vim outputs.tf
     #terraform apply -var-file values.txt

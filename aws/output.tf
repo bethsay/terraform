@@ -18,3 +18,6 @@ output "mys3_id_fourth"{
   value = length(aws_s3_bucket.fourth)>0 ? aws_s3_bucket.fourth[*].id : null
 }
 
+output "mys3_id_all"{
+  value = local.mys3_id_all
+}

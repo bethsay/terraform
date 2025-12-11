@@ -95,6 +95,7 @@ The tags argument in aws_s3_bucket resource allows us to add new tags and/or ove
     #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_s3_bucket.second") | .values | with_entries( select( .key | startswith("tag") ) )'
     #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_s3_bucket.second") | .values.tags'
     #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_s3_bucket.second") | .values.tags_all'
+    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_s3_bucket.second") | .values | {tags: .tags, tags_all: .tags_all}'
     #aws s3api get-bucket-tagging help
     #aws s3api get-bucket-tagging --bucket $(aws s3api list-buckets --query "Buckets[].Name" --output text)
     #aws s3api get-bucket-tagging --bucket $(terraform output -raw mys3_id_second )
@@ -200,7 +201,7 @@ There are 3 solutions for this for_each error.
     Define the list as a local. Set the count as length(local.list) and the name of buckets as list items at count.index
         #vim s3.tf
         #terraform apply
-    The value of output.mys3_id_third no longer needs the values() funtion.
+    The value of output.mys3_id_third no longer needs the values() function.
         #terraform console
             #aws_s3_bucket.third[*].id
         #vim output.tf
@@ -359,14 +360,21 @@ Although versioning is an argument in aws_s3_bucket resource, terraform has depr
 Using aws_s3_bucket_versioning resource is the recomended methods to enable/disable versioning.
 Create a local to hold a list of any/all bucket names to be cycled in the bucket argument in aws_s3_bucket_versioning.
 As we need to combine 2 strings with 2 lists, we will use setunion function with compact. https://developer.hashicorp.com/terraform/language/functions/setunion
+This combined list will be a good addition to our output as well.
     #terraform console
         #setunion([try(aws_s3_bucket.first[0].id, null)], [try(aws_s3_bucket.second[0].id, null)], aws_s3_bucket.third[*].id, aws_s3_bucket.fourth[*].id)
         #compact(setunion([try(aws_s3_bucket.first[0].id, null)], [try(aws_s3_bucket.second[0].id, null)], aws_s3_bucket.third[*].id, aws_s3_bucket.fourth[*].id))
     #vim s3.tf
+    #vim output.tf
+Create another local to be 5 when suffix_type is all and var.bucket_versioning is true, or 1 if only var.bucket_versioning is true else be 0
+We are using 5 as it would be the number of buckets created if suffix_type is all (time+word+string+uuid+uuidv5). Create a local that describes why 5 is used.
+    #terraform console
+        #(var.bucket_versioning && var.suffix_type=="all") ? 5 : ( var.bucket_versioning ? 1 : 0)
+    #vim s3.tf
 Create the aws_s3_bucket_versioning resource. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_versioning.
-Set count to 5 if var.suffix_type is all (time+word+string+uuid+uuidv5) and var.bucket_versioning is true.
-Set count to 1 if var.bucket_versioning is true else set count to 0. No need to check what type of suffix you have chosen.
-Set bucket to cycle through local.mys3_id_all. Create versioning_configuration argument block and set status as Enabled.
+Set count to local.bucket_versioning_count
+Set bucket to cycle through local.mys3_id_all.
+Create versioning_configuration argument block and set status as Enabled.
     #vim s3.tf
     #terraform apply
     #aws s3api get-bucket-versioning help
@@ -382,6 +390,38 @@ Set bucket to cycle through local.mys3_id_all. Create versioning_configuration a
 We will be using this project as a child_module in other terraform_aws projects to prepare backends.
 But before that, lets look basic functionality of s3 buckets,ie to store files.
 Create a variable bucket_upload which should accept a list of files. Default value should be an emptyset.
+    #vim variables.tf
+    #terraform console
+        #var.bucket_upload
+We will be using that aws_s3_object resource to upload a source, into bucket as key.
+We can use either count or for_each (never both) to cycle through buckets or sources. When suffix_type is all, we need to be able to cycle through 2 lists.
+The setproduct function combines 2 lists to create a new list containing sublists of 2 elements each.
+Create one local that is a setproduct of local.mys3_id_all and var.bucket_upload and another local that is the product of lengths of each list.
+    #terraform console
+        #setproduct(["A","B","C","D",],[1,2,3])
+        #setproduct(local.mys3_id_all, var.bucket_upload)
+    #vim s3.tf
+Create local.bucket_upload_count to be product of lengths when suffix_type is all and var.bucket_upload is not empty, or the length of var.bucket_upload
+    #terraform console
+        #(length(var.bucket_upload)>0 && var.suffix_type=="all") ? local.bucket_upload_max : length(var.bucket_upload)
+    #vim s3.tf
+Create aws_s3_object resource. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_object
+Set count as local.bucket_upload_count.
+Set bucket argument to cycle through local.bucket_upload_set and pick the 0th element of each subset.
+Set source argument to cycle through local.bucket_upload_set and pick the 1st element of each subset.
+Set key argument to prefix a directory_name to the basenames of the 1st element of every subset of local.bucket_upload_set
+    #vim s3.tf
+    #terraform apply -var 'suffix_type=string' -var 'bucket_upload=["../aws.txt"]'
+    #terraform state list
+    #aws s3api list-buckets | jq -r '.Buckets[].Name'
+    #aws s3api list-objects-v2 help
+    #aws s3api list-buckets | jq -r '.Buckets[].Name' | xargs -L 1 aws s3api list-objects-v2 --bucket | jq -r '.Contents[] | [.LastModified, .Size, .Key ] | @tsv'
+    #terraform apply -var 'suffix_type=string' -var 'bucket_upload=[$(printf '"%s", ' ../*.txt)]'
+    #aws s3api list-buckets | jq -r '.Buckets[].Name' | xargs -L 1 aws s3api list-objects-v2 --bucket | jq -r '.Contents[] | [.LastModified, .Size, .Key ] | @tsv'
+    #terraform apply -var 'bucket_upload=[$(ls -Qm ../*.txt)]'
+    #aws s3api list-buckets | jq -r '.Buckets[].Name'
+    #aws s3api list-buckets | jq -r '.Buckets[].Name' | xargs -L 1 aws s3api list-objects-v2 --bucket | jq -r '.Contents[] | [.LastModified, .Size, .Key ] | @tsv'
+    #terraform destroy
 
 
 Using the aws_s3_object resource lets upload files into this S3 bucket.
@@ -391,9 +431,8 @@ The source argument is the path of the file that we want to upload. Alternativel
     #vim s3.tf
 Create the resources and check if they have been created via console or cli
     #terraform apply
-    #terraform state list
     #aws s3api list-objects-v2 --bucket <bucket_name>
-    #terraform apply -var 'bucket_upload=[$(ls ../*.txt| tr '\n' ',')]'
+    #terraform apply -var 'suffix_type=string' -var 'bucket_upload=[$(ls ../*.txt| tr '\n' ',')]'
     #ls ../*.txt| paste -sd,| xargs -I?? terraform apply -var 'bucket_upload=[??]'
 
 Lets use S3 for maintaining the backend of our aws terraform projects. https://developer.hashicorp.com/terraform/language/backend/s3
