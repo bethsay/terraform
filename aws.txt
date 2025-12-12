@@ -55,7 +55,7 @@ You can check aws console if the bucket was created or not
     #aws s3 ls
 
 Lets start using terraform to create and manage resources in this aws account of ours.
-    #mkdir aws && cd aws
+    #mkdir 01-aws-s3 && cd 01-aws-s3
 Use the aws provider and set it up with shared config and creds. Refer https://registry.terraform.io/providers/hashicorp/aws/latest/docs#shared-configuration-and-credentials-files
     #vim providers.tf
 The config in aws providers block is optional if you are using default profile and default paths.
@@ -416,24 +416,20 @@ Set key argument to prefix a directory_name to the basenames of the 1st element 
     #aws s3api list-buckets | jq -r '.Buckets[].Name'
     #aws s3api list-objects-v2 help
     #aws s3api list-buckets | jq -r '.Buckets[].Name' | xargs -L 1 aws s3api list-objects-v2 --bucket | jq -r '.Contents[] | [.LastModified, .Size, .Key ] | @tsv'
-    #terraform apply -var 'suffix_type=string' -var 'bucket_upload=[$(printf '"%s", ' ../*.txt)]'
+    #terraform apply -var 'suffix_type=string' -var "bucket_upload=[$(printf '"%s", ' ../*.txt)]"
+        ->Double Quotes are needed for var.bucket_upload
+    #printf '"%s", ' ../*.txt | xargs -d '\n' -I?? terraform apply -var 'suffix_type=string' -var 'bucket_upload=[??]' -auto-approve
+    #printf '"%s", ' ../*.txt | { read list; terraform apply -var 'suffix_type=string' -var "bucket_upload=[$list]" -auto-approve;}
+        ->Double Quotes are needed for var.bucket_upload
     #aws s3api list-buckets | jq -r '.Buckets[].Name' | xargs -L 1 aws s3api list-objects-v2 --bucket | jq -r '.Contents[] | [.LastModified, .Size, .Key ] | @tsv'
     #terraform apply -var 'bucket_upload=[$(ls -Qm ../*.txt)]'
+    #ls -Qm ../*.txt | xargs -d '\n' -I?? terraform apply -var 'bucket_upload=[??] -auto-approve'
+    #ls -Qm ../*.txt | { read list; terraform apply -var "bucket_upload=[$list]" -auto-approve; }
+        ->Double Quotes are needed for var.bucket_upload
     #aws s3api list-buckets | jq -r '.Buckets[].Name'
     #aws s3api list-buckets | jq -r '.Buckets[].Name' | xargs -L 1 aws s3api list-objects-v2 --bucket | jq -r '.Contents[] | [.LastModified, .Size, .Key ] | @tsv'
     #terraform destroy
 
-
-Using the aws_s3_object resource lets upload files into this S3 bucket.
-The bucket argument will be the destination of our file upload.
-The key argument will be the path/filename within the bucket.
-The source argument is the path of the file that we want to upload. Alternatively, you can use the content argument to write into key
-    #vim s3.tf
-Create the resources and check if they have been created via console or cli
-    #terraform apply
-    #aws s3api list-objects-v2 --bucket <bucket_name>
-    #terraform apply -var 'suffix_type=string' -var 'bucket_upload=[$(ls ../*.txt| tr '\n' ',')]'
-    #ls ../*.txt| paste -sd,| xargs -I?? terraform apply -var 'bucket_upload=[??]'
 
 Lets use S3 for maintaining the backend of our aws terraform projects. https://developer.hashicorp.com/terraform/language/backend/s3
 If backend config is changed, you will have to perform init again.

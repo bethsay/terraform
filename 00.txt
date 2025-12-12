@@ -19,7 +19,7 @@ To enable autocompletion for terraform commands. This will append a line to ~/.b
 For other systems, check https://developer.hashicorp.com/terraform/install
 
 Lets understand the core/basic concepts of a terraform project.
-    #mkdir basics && cd basics
+    #mkdir 00-basics && cd 00-basics
 After we create our IaC, Terraform needs to convert it to the actual apis of that specific cloud vendor. This is done by terraform providers.
 Hashicorp and its partners have published these "providers" package at https://registry.terraform.io/browse/providers
 Lets start off with using the local provider which has the simple capability of creating files in the local systems.
@@ -173,7 +173,7 @@ Thats all about the basics. Before we commit and move to advanced terraform use,
 
 Variables block in terraform allows us to parameterize the code making it reuseable. https://developer.hashicorp.com/terraform/language/block/variable
 Initialize a new project (directory or folder) with a local povider
-    #mkdir variables_and_functions && cd variables_and_functions
+    #mkdir 00-basics-plus && cd 00-basics-plus
     #vim providers.tf
         ->Use the hashicorp/local as a required_providers.
     #terraform init
@@ -413,24 +413,24 @@ Thats all about the advanced topics. Before we commit and move to basics of terr
 -------------------------PENDING: Try the provisioner blocks within resources-------------------------
 Modules are a fully working terraform project that can be reused in other project like an add-on package.
 Any project that we create is called the root module. Lets create one
-    #mkdir modules
+    #mkdir 00-basics-modules
 This root module can contain other projects like a package. These are called child modules. Lets create one.
-    #mkdir modules/child_module
+    #mkdir 00-basics-modules/child_module
 Hashicorp maintains a registry of modules we can use in our root module. https://registry.terraform.io/browse/modules
 Let use code from variables_and_functions to create a child module.
-    #vim ./modules/child_module/providers.tf
+    #vim ./00-basics-modules/child_module/providers.tf
         ->Use hashicorp/local as a required_providers
-    #vim ./modules/child_module/main.tf
+    #vim ./00-basics-modules/child_module/main.tf
         ->Use the locals block along with the env_files_set and component_files resource blocks from ./variables_and_functions/main.tf
-    #vim ./modules/child_module/variables.tf
+    #vim ./00-basics-modules/child_module/variables.tf
         ->Use the env and component variables from ./variables_and_functions/variables.tf
-    #vim ./modules/child_module/outputs.tf
+    #vim ./00-basics-modules/child_module/outputs.tf
         ->Use path, items and count output from ./variables_and_functions/outputs.tf
         ->No need to make it human-readable, so skip the format function
         ->Update the output values so that it reflects the data available in ./modules/child_module/main.tf
 Now lets create our root module. Usually you would include required_providers block.
 Since the only resources that will be created are using the child_module, we can skip it.
-    #vim modules/main.tf
+    #vim 00-basics-modules/main.tf
         ->Create module block with the source as ./child_module
         ->Copy the values for env and component from ./variables_and_functions/values.txt into the module block
         ->Create a output block whose value would be a set of count, path and items output of the module

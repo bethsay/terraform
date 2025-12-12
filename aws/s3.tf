@@ -87,12 +87,12 @@ resource "aws_s3_bucket" "fourth" {
 
 locals {
   mys3_count_all = 1+2+2          # time+(words+string)+(uuid+uuidv5_int)
-  mys3_id_all = compact(setunion(
+  mys3_id_all = compact(tolist(setunion(
     [try(aws_s3_bucket.first[0].id, null)],
     [try(aws_s3_bucket.second[0].id, null)],
     aws_s3_bucket.third[*].id,
     aws_s3_bucket.fourth[*].id
-  ))
+  )))
   bucket_versioning_count = (var.bucket_versioning && var.suffix_type=="all") ? local.mys3_count_all : ( var.bucket_versioning ? 1 : 0)
 }
 
