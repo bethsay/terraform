@@ -39,4 +39,4 @@ terraform.rc
 
 # Bethsay's changes
 training/
-!aws/terraform.rc
+!01-aws-s3/terraform.rc
