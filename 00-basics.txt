@@ -233,7 +233,7 @@ The types primitive variables available are string, number, bool. https://develo
 Locals block in terraform allows for the substitution of repeating values within a project with a key. https://developer.hashicorp.com/terraform/language/block/locals
 locals block is also used to maintain the value of a function/expression in a key that can be used repeatedly.
 This is better than processing the function repeatedly. https://developer.hashicorp.com/terraform/language/functions
-    #cd variables_and_functions
+    #cd 00-basics-plus
 Create a local block to uppercase a string and use it as the new parent directory of all resources
     #vim main.tf
 See if terraform can use the modification
@@ -244,7 +244,7 @@ See if terraform can use the modification
     #terraform apply -var-file values.txt
 
 Lets try out some complex types in variables like list, set and map. https://developer.hashicorp.com/terraform/language/expressions/types
-    #cd variables_and_functions
+    #cd 00-basics-plus
 Create 2 variables. One must accept a set of strings with at least 2 default values
 And the other variable must accept a map of objects with at least 2 objects. Each object is a key value pair.
     #vim variables.tf
@@ -303,7 +303,7 @@ If the default values picked up successfully, lets apply it with custom values t
 
 Output blocks in terraform are used to share relevant information after deploying a project.
 This is often used to create a summary on stdout or to send data to another tool for further processing.
-    #cd variables_and_functions
+    #cd 00-basics-plus
 We can tally the number of resources created by using the length function on each local_file resource and adding them up
     #terraform console -var-file values.txt
         #length(local_file.file1) + length(local_file.file2) + .. + ..
@@ -417,22 +417,22 @@ Any project that we create is called the root module. Lets create one
 This root module can contain other projects like a package. These are called child modules. Lets create one.
     #mkdir 00-basics-modules/child_module
 Hashicorp maintains a registry of modules we can use in our root module. https://registry.terraform.io/browse/modules
-Let use code from variables_and_functions to create a child module.
+Let use code from 00-basics-plus to create a child module.
     #vim ./00-basics-modules/child_module/providers.tf
         ->Use hashicorp/local as a required_providers
     #vim ./00-basics-modules/child_module/main.tf
-        ->Use the locals block along with the env_files_set and component_files resource blocks from ./variables_and_functions/main.tf
+        ->Use the locals block along with the env_files_set and component_files resource blocks from ./00-basics-plus/main.tf
     #vim ./00-basics-modules/child_module/variables.tf
-        ->Use the env and component variables from ./variables_and_functions/variables.tf
+        ->Use the env and component variables from ./00-basics-plus/variables.tf
     #vim ./00-basics-modules/child_module/outputs.tf
-        ->Use path, items and count output from ./variables_and_functions/outputs.tf
+        ->Use path, items and count output from ./00-basics-plus/outputs.tf
         ->No need to make it human-readable, so skip the format function
         ->Update the output values so that it reflects the data available in ./modules/child_module/main.tf
 Now lets create our root module. Usually you would include required_providers block.
 Since the only resources that will be created are using the child_module, we can skip it.
     #vim 00-basics-modules/main.tf
         ->Create module block with the source as ./child_module
-        ->Copy the values for env and component from ./variables_and_functions/values.txt into the module block
+        ->Copy the values for env and component from ./00-basics-plus/values.txt into the module block
         ->Create a output block whose value would be a set of count, path and items output of the module
 Lets Initialize and apply our root module
     #terraform init

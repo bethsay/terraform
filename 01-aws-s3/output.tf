@@ -1,23 +1,23 @@
-output "mys3_id_first"{
+output "mys3_id_first" {
   # value = aws_s3_bucket.first.id
   value = try(aws_s3_bucket.first[0].id, null)
 }
 
-output "mys3_id_second"{
+output "mys3_id_second" {
   # value = aws_s3_bucket.second.id
   value = try(aws_s3_bucket.second[0].id, null)
 }
 
-output "mys3_id_third"{
+output "mys3_id_third" {
   # # value = values(aws_s3_bucket.second)[*].id
   # value = aws_s3_bucket.third[*].id
-  value = length(aws_s3_bucket.third)>0 ? aws_s3_bucket.third[*].id : null
+  value = length(aws_s3_bucket.third) > 0 ? aws_s3_bucket.third[*].id : null
 }
 
-output "mys3_id_fourth"{
-  value = length(aws_s3_bucket.fourth)>0 ? aws_s3_bucket.fourth[*].id : null
+output "mys3_id_fourth" {
+  value = length(aws_s3_bucket.fourth) > 0 ? aws_s3_bucket.fourth[*].id : null
 }
 
-output "mys3_id_all"{
+output "mys3_id_all" {
   value = local.mys3_id_all
 }

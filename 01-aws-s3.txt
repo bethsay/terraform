@@ -430,39 +430,7 @@ Set key argument to prefix a directory_name to the basenames of the 1st element 
     #aws s3api list-buckets | jq -r '.Buckets[].Name' | xargs -L 1 aws s3api list-objects-v2 --bucket | jq -r '.Contents[] | [.LastModified, .Size, .Key ] | @tsv'
     #terraform destroy
 
-
-Lets use S3 for maintaining the backend of our aws terraform projects. https://developer.hashicorp.com/terraform/language/backend/s3
-If backend config is changed, you will have to perform init again.
-To ignore previous
-    #terraform init -reconfigure
-To migrate-state
-    #terraform init -force-copy
-
-    #vim .terraformrc
-
-
-The .terraform folder contains the the plugin of the aws provider, which takes up 750Mb of disk space.
-
-Using the aws_iam_user resource, create a user. name is a required argument. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user
-    #vim iam.tf
-Create the resources and check if they have been created via console or cli
-    #terraform apply
-    #terraform state
-    #aws iam list-users
-    #aws iam get-user --user-name tf-user
-Using aws_iam_access_key resource, create accesskey and secret. user is a required argument and should refer the name or id attribute of the aws_iam_user resource.
-    #vim iam.tf
-    #terraform apply
-    #aws iam list-access-keys --user-name tf-user
-    #terraform state show aws_iam_access_key.first
-The aws_iam_access_key resource is created with its secret but is masked as it is a sensitive attribute. To see it,
-    #less terraform.tfstate
-    #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_iam_access_key.first") | .values.secret'
-
-To generate aws user policies, Use https://awspolicygen.s3.amazonaws.com/policygen.html
-
-The iam_admin user that we had create via aws console is only authorized to create IAM users and S3 buckets.
-Terraform will use the iam_admin authorization to create IAM user with greater permissions.
-The access of these codeified users will allow us to create and manage any resource in our aws account.
-Lets create a project which we can use to manage new IAM users and their permission
-
+We will be using the learnings from this project to create child_module in other aws projects to prepare backends.
+Thats all about 01-aws-s3 project . Before we commit, lets format our code
+    #terraform fmt -check
+    #terraform fmt -diff

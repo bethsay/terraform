@@ -4,14 +4,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "6.23.0"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = "3.7.2"
-    }
-    external = {
-      source  = "hashicorp/external"
-      version = "2.3.5"
-    }
   }
   # backend "s3" {
   #   bucket = "terraform-backend-bucket-20251128040048159500000001"
@@ -32,5 +24,3 @@ provider "aws" {
     }
   }
 }
-provider "external" {}
-provider "random" {}
