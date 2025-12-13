@@ -1,12 +1,7 @@
-# resource "aws_iam_user" "first" {
-#   name = "tf-user"
-#   # path = "/system/"
-#
-#   tags = {
-#     project = "training"
-#     env     = "dev"
-#   }
-# }
+resource "aws_iam_user" "first" {
+  name = "tf-user"
+  # path = "/system/"
+}
 #
 # resource "aws_iam_access_key" "first" {
 #   user = aws_iam_user.first.name

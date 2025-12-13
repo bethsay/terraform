@@ -1,3 +1,29 @@
+We are starting a new project of managing iam users and their permissions/policies.
+    #mkdir 02-aws-iam/
+So far, our terraform.tfstate had been stored locally. This is fine if you are not collaborating for your tf projects.
+Terraform allows for the use of aws s3 buckets to maintain terraform state files with versioning, file locking and access control.
+The bucket must have been created and be accessible before it can be configured and as a backend.
+Also, No dynamic bucket names or variable resource mapping is supported within the terraform, required_providers, backend, or provider blocks.
+Knowing this lets create a sub project to handle this s3 pre-requisite.
+    #mkdir ./02-aws-iam/pre-init/ && cd ./02-aws-iam/pre-init/
+Use the aws provider and set it up with shared config, creds, profile. https://registry.terraform.io/providers/hashicorp/aws/latest/docs#shared-configuration-and-credentials-files
+    #vim providers.tf
+We wont be using any backend config here, so, our terraform.tfstate will be local
+Initialize the project by installing the provider plugin
+    #terraform init
+Define variables for s3_prefix(string), bucket_force_destroy(bool), bucket_extra_tags(map) with default values
+    #vim variables.tf
+To ensure we get a unique bucket_name, lets use a local generate a uuidv5, split it, and use any part of it as bucket suffix.
+Create an aws_s3_bucket resource using the variables and local as bucket, force_destroy, and tags argument.
+Terraform recomends that the backend bucket must have versioning enabled. https://developer.hashicorp.com/terraform/language/backend/s3
+Create aws_s3_bucket_versioning resource with versioning Enabled for aws_s3_bucket resource. 
+    #vim backend.tf
+Lets output the bucket name/id to be used later.
+    #vim outputs.tf
+Lets get these resources created.
+    #terraform apply
+    #aws s3api list-buckets
+    #terraform output s3_id
 
 
 Lets use S3 for maintaining the backend of our aws terraform projects. https://developer.hashicorp.com/terraform/language/backend/s3
@@ -6,6 +32,9 @@ To ignore previous
     #terraform init -reconfigure
 To migrate-state
     #terraform init -force-copy
+
+date | { read DATE_VAL; sed -i "s/^\(key1 = \).*/\1$DATE_VAL/" your_config_file.txt; }
+sed -i "s/^\(key1 = \).*/\1$(date)/" your_config_file.txt
 
     #vim .terraformrc
 

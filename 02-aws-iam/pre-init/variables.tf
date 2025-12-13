@@ -1,6 +1,6 @@
 variable "s3_prefix" {
   type    = string
-  default = "tf-bucket"
+  default = "terraform-backend"
 }
 
 variable "bucket_force_destroy" {

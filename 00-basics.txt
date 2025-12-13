@@ -120,16 +120,8 @@ Another way to read the current state is with the terraform state command or the
         ->Cannot be done with terraform state command, but very useful filters
 While the state show command will mask sensitive data, it is stored as plain text in terraform.tfstate
 By default, tfstate is stored locally in the project directory, which is unsecure.
-You can maintain tfstate at a remote secure location by defining a backend configuration. Lets try s3 as a backend.
-    #vim providers.tf
-        ->terraform {
-        ->  required_providers {...}
-        ->  backend "s3" {
-        ->    bucket = "mybucket"
-        ->    key    = "path/to/my/key"
-        ->    region = "us-east-1"
-        ->  }
-        ->}
+You can maintain tfstate at a remote secure location by defining a backend configuration.
+In the upcoming 02-aws-iam project of we will have the first look at using s3 bucket as a backend.
 Other backends include remote(hcp or enterprise), azurerm blob, googlecs, postgres, k8secret, urls. https://developer.hashicorp.com/terraform/language/backend
 Lets revisit to check the subcommands of terraform state.
 
