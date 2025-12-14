@@ -73,6 +73,29 @@ It is good practice to format your IaC before pushing your code to your code rep
 To delete/destroy all resource tracked by the tfstate (not the IaC) use
     #terraform destroy
 
+When newer versions of local provider is to be used, you will need to edit its version in the required_providers block and run terraform init.
+You may prefix the version with an operator. https://developer.hashicorp.com/terraform/language/expressions/version-constraints#operators
+Version constraint operators allows terraform to pick the latest from range of provider versions without needing to edit your code each time.
+Lets configure the version of local provider to use the latest 2.x.x version.
+    #vim providers.tf
+    #head .terraform.lock.hcl
+    #terraform init
+    #head .terraform.lock.hcl
+Although the code is now modified, terraform.lock.hcl is not changed and providers will not automatically update to the latest version
+In fact, even if you clone this project to a new machine and perform terraform init,
+Terraform will not check if a newer provider exist and will proceed to download and install the current version itself.
+When you see a new version of the provider is released, and want to have the upgrade, run
+    #head .terraform.lock.hcl
+    #terraform init -upgrade
+    #ll .terraform/providers/registry.terraform.io/hashicorp/local/
+    #head .terraform.lock.hcl
+This updates the dependency and installed the new plugin but keeps the old one as well.
+Now that an upgrade has been applied. Test the IaC with plan, apply and destroy.
+Ensure everything is working as expected and that nothing breaks.
+Do not commit or push the code to git repo if you find issues.
+If the local upgrade breaks the local project and you cant fix it,
+Delete the local project and pull a working copy from your remote code repository.
+
 Terraform plan will read our .tf files, parse it with the required_providers installed during init. This can be saved as a plan file.
 This is the content that is actually used by terraform. This is then again converted to an output that we can read and understand.
     #cd basics

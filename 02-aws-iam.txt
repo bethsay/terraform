@@ -1,15 +1,16 @@
 We are starting a new project of managing iam users and their permissions/policies.
     #mkdir 02-aws-iam/
-So far, our terraform.tfstate had been stored locally. This is fine if you are not collaborating for your tf projects.
-Terraform allows for the use of aws s3 buckets to maintain terraform state files with versioning, file locking and access control.
+
+So far, our terraform.tfstate had been stored locally. This is fine if you are not collaborating for your terraform projects.
+Terraform allows for the use of aws s3 buckets to maintain terraform state files with encryption, versioning, file locking and access control.
 The bucket must have been created and be accessible before it can be configured and as a backend.
 Also, No dynamic bucket names or variable resource mapping is supported within the terraform, required_providers, backend, or provider blocks.
 Knowing this lets create a sub project to handle this s3 pre-requisite.
     #mkdir ./02-aws-iam/pre-init/ && cd ./02-aws-iam/pre-init/
 Use the aws provider and set it up with shared config, creds, profile. https://registry.terraform.io/providers/hashicorp/aws/latest/docs#shared-configuration-and-credentials-files
     #vim providers.tf
-We wont be using any backend config here, so, our terraform.tfstate will be local
-Initialize the project by installing the provider plugin
+We wont be using s3 backend config here, so, our terraform.tfstate will be local
+Initialize the project by installing the provider plugin/binary
     #terraform init
 Define variables for s3_prefix(string), bucket_force_destroy(bool), bucket_extra_tags(map) with default values
     #vim variables.tf
@@ -23,8 +24,13 @@ Lets output the bucket name/id to be used later.
 Lets get these resources created.
     #terraform apply
     #aws s3api list-buckets
+    #aws s3api get-bucket-versioning --bucket $(aws s3api list-buckets | jq -r '.Buckets[0].Name')
     #terraform output s3_id
+    #aws s3api get-bucket-versioning --bucket $(terraform output -raw s3_id)
+When you stop or complete this project, delete all resources
+    #terraform destroy
 
+Lets switch back to our main project
 
 Lets use S3 for maintaining the backend of our aws terraform projects. https://developer.hashicorp.com/terraform/language/backend/s3
 If backend config is changed, you will have to perform init again.
