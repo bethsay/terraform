@@ -39,4 +39,4 @@ terraform.rc
 
 # Bethsay's changes
 training/
-!02-aws-iam/terraform.rc
+!00-basics/terraform.rc

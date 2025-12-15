@@ -77,13 +77,14 @@ When newer versions of local provider is to be used, you will need to edit its v
 You may prefix the version with an operator. https://developer.hashicorp.com/terraform/language/expressions/version-constraints#operators
 Version constraint operators allows terraform to pick the latest from range of provider versions without needing to edit your code each time.
 Lets configure the version of local provider to use the latest 2.x.x version.
+    #cd 00-basics
     #vim providers.tf
     #head .terraform.lock.hcl
     #terraform init
     #head .terraform.lock.hcl
-Although the code is now modified, terraform.lock.hcl is not changed and providers will not automatically update to the latest version
+Although the code is now modified, terraform.lock.hcl has not changed and providers will not automatically update to the latest version
 In fact, even if you clone this project to a new machine and perform terraform init,
-Terraform will not check if a newer provider exist and will proceed to download and install the current version itself.
+Terraform will not check if a newer provider exist but will proceed to download and install the current version itself.
 When you see a new version of the provider is released, and want to have the upgrade, run
     #head .terraform.lock.hcl
     #terraform init -upgrade
@@ -91,14 +92,57 @@ When you see a new version of the provider is released, and want to have the upg
     #head .terraform.lock.hcl
 This updates the dependency and installed the new plugin but keeps the old one as well.
 Now that an upgrade has been applied. Test the IaC with plan, apply and destroy.
-Ensure everything is working as expected and that nothing breaks.
-Do not commit or push the code to git repo if you find issues.
-If the local upgrade breaks the local project and you cant fix it,
-Delete the local project and pull a working copy from your remote code repository.
+Do not git add, commit or push the Iac to your code repo without full testing.
+If the provider upgrade breaks the IaC project and you want to undo the upgrade,
+You can edit the version in required_providers with an exact older version that you know was working and re-run upgrade.
+    #vim providers.tf
+    #terraform init -upgrade
+Or if your IaC is tracked by git and you can restore the dependency lock file to before the upgrade and run terraform init.
+    #git restore .terraform.lock.hcl
+    #terraform init
+
+The download path for the provider plugins is .terraform within the project directory
+    #cd 00-basics
+    #ll .terraform/providers/registry.terraform.io/hashicorp/<provider>/<version>/<system_arch>/
+    #ll -h .terraform/providers/registry.terraform.io/hashicorp/local/2.5.3/linux_amd64/
+    #du -csh .terraform/providers
+The plugin of local provider and other simple providers are relatively small, about 15MB in size.
+But the size of aws, azure and gcp plugins are about 500-700MB each.
+When you are running multiple projects on the same system, even if the same providers are used in each project,
+You will be wasting space due to duplication of the same plugins in each project.
+Also, terraform will be downloading the binary from the internet each time, even though a copy exists in the system.
+Also, when you apply provider upgrades, storage utilization gets multiplied.
+To relclaim storage after successful upgrade, you will have to cycle through each project and delete the old plugin.
+This behaviour can be managed by creating a terraformrc in users home directory
+The plugin_cache_dir will be used as the destination for all future plugin downloads that would be performed by terraform init
+    #vim terraform.rc
+    #cp terraform.rc ~/.terraformrc
+Lets test this by deleting our exisiting providers and doing a terraform init re-run
+    #du -csh .terraform/providers
+    #rm -r .terraform/providers
+    #terraform init
+    #du -csh .terraform/providers
+    #ll -h .terraform/providers/registry.terraform.io/hashicorp/local/2.5.3/
+    #ll ~/.terraform.d/plugin-cache/registry.terraform.io/hashicorp/local/2.5.3/linux_amd64/
+The plugin that was present under .terraform/providers is now replaced with a symlink to the plugin_cache_dir.
+Any new projects with required_providers that exist in plugin_cache_dir will have near instant init times.
+An advanced use case of terraformrc is to configure filesystem_mirror as a provider installation source.
+Ensure filesystem_mirror path is different from plugin_cache_dir
+    #vim terraform.rc
+The sample config in terraformrc instructs terraform init to only check the filesystem path if the source of the required_provider is example.com
+If the required_providers source is not example.com terraform init should send a download request directly to the URL.
+So, if the filesystem_mirror has not been pre-loaded with the providers needed for your project, terraform init will fail.
+To pre-load the filesystem_mirror, you can have another machine that has terraform installed and the stubs of all your terraform projects.
+Stub of an terraform project is an name for the sections of code that are needed to perform terraform init, ie, providers.tf, ie, terraform blocks.
+Navigate to each project stub, and instead of terraform init, run
+    #terraform providers mirror /download/path/for/providers
+You can choose the download path to be a shared drive between both systems.
+Or compress/package the downloads such that directory structure is preserved and transfer to terraform runner machine that need to use filesystem_mirror.
+You could aslo temporarily connect your terraform runner machine to an internet gateway and run providers mirror command to populate the filesystem_mirror.
 
 Terraform plan will read our .tf files, parse it with the required_providers installed during init. This can be saved as a plan file.
 This is the content that is actually used by terraform. This is then again converted to an output that we can read and understand.
-    #cd basics
+    #cd 00-basics
     #terraform plan -out ./local.tfplan
         ->You can see in stdout the actions that terraform will do if the plan is executed.
         ->This also creates a local.tfplan file. We cant read the file but it can be processed by any terraform client.
@@ -121,7 +165,7 @@ Terraform can execute an apply or destroy without asking for approval when using
         ->Same as terraform destroy -auto-approve
 
 Every terraform apply implements the plan and update the terraform.tfstate
-    #cd basics
+    #cd 00-basics
     #less terraform.tfstate
 Another way to read the current state is with the terraform state command or the terraform show command
     #terraform state -h
@@ -153,7 +197,7 @@ State Drift is said to have occured if the actual infra is different from the tf
 State Drift happens when actual infra is modified without terraform. Here actual state will be different from state file and code.tf
 The plan or apply commands then parse tf files of the project with provider and is again compared with the in-memory tfstate and the difference is outputted to us for approval.
 Lets cause State Drift in our project.
-    #cd basics
+    #cd 00-basics
     #echo "State Drift is happening" > ./training/file_by_tf.txt
 Is this change detected by tf state?
     #less terraform.tfstate
@@ -172,7 +216,7 @@ Just as terraform apply includes a plan stage, terraform plan includes a refresh
 Every resource_type have their own unique arguments whose values allows us to codeify resource creation.
 Terraform has meta-arguments (count, depends_on, for_each) to be used on any resource, and are not restricted by type. https://developer.hashicorp.com/terraform/language/meta-arguments
 The count meta-argument can be used to create copies of a resource
-    #cd basics
+    #cd 00-basics
     #vim resources.tf
         ->Add count = 4 into latest local_file blocks
         ->Use the ${count.index} parameter into its filename as well.
