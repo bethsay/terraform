@@ -411,7 +411,7 @@ Set bucket argument to cycle through local.bucket_upload_set and pick the 0th el
 Set source argument to cycle through local.bucket_upload_set and pick the 1st element of each subset.
 Set key argument to prefix a directory_name to the basenames of the 1st element of every subset of local.bucket_upload_set
     #vim s3.tf
-    #terraform apply -var 'suffix_type=string' -var 'bucket_upload=["../aws.txt"]'
+    #terraform apply -var 'suffix_type=string' -var 'bucket_upload=["../01-aws-s3.txt"]'
     #terraform state list
     #aws s3api list-buckets | jq -r '.Buckets[].Name'
     #aws s3api list-objects-v2 help
@@ -423,7 +423,7 @@ Set key argument to prefix a directory_name to the basenames of the 1st element 
         ->Double Quotes are needed for var.bucket_upload
     #aws s3api list-buckets | jq -r '.Buckets[].Name' | xargs -L 1 aws s3api list-objects-v2 --bucket | jq -r '.Contents[] | [.LastModified, .Size, .Key ] | @tsv'
     #terraform apply -var 'bucket_upload=[$(ls -Qm ../*.txt)]'
-    #ls -Qm ../*.txt | xargs -d '\n' -I?? terraform apply -var 'bucket_upload=[??] -auto-approve'
+    #ls -Qm ../*.txt | xargs -d '\n' -I?? terraform apply -var 'bucket_upload=[??]' -auto-approve
     #ls -Qm ../*.txt | { read list; terraform apply -var "bucket_upload=[$list]" -auto-approve; }
         ->Double Quotes are needed for var.bucket_upload
     #aws s3api list-buckets | jq -r '.Buckets[].Name'

@@ -13,12 +13,6 @@ terraform {
       version = "~>2.3"
     }
   }
-  # backend "s3" {
-  #   bucket = "terraform-backend-bucket-20251128040048159500000001"
-  #   key = "second/terraform.tfstate"
-  #   region = "us-east-1"
-  #   use_lockfile = true
-  # }
 }
 
 provider "aws" {

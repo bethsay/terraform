@@ -104,7 +104,7 @@ Or if your IaC is tracked by git and you can restore the dependency lock file to
 The download path for the provider plugins is .terraform within the project directory
     #cd 00-basics
     #ll .terraform/providers/registry.terraform.io/hashicorp/<provider>/<version>/<system_arch>/
-    #ll -h .terraform/providers/registry.terraform.io/hashicorp/local/2.5.3/linux_amd64/
+    #ll -h .terraform/providers/registry.terraform.io/hashicorp/local/2.6.1/linux_amd64/
     #du -csh .terraform/providers
 The plugin of local provider and other simple providers are relatively small, about 15MB in size.
 But the size of aws, azure and gcp plugins are about 500-700MB each.
@@ -122,8 +122,8 @@ Lets test this by deleting our exisiting providers and doing a terraform init re
     #rm -r .terraform/providers
     #terraform init
     #du -csh .terraform/providers
-    #ll -h .terraform/providers/registry.terraform.io/hashicorp/local/2.5.3/
-    #ll ~/.terraform.d/plugin-cache/registry.terraform.io/hashicorp/local/2.5.3/linux_amd64/
+    #ll -h .terraform/providers/registry.terraform.io/hashicorp/local/2.6.1/
+    #ll ~/.terraform.d/plugin-cache/registry.terraform.io/hashicorp/local/2.6.1/linux_amd64/
 The plugin that was present under .terraform/providers is now replaced with a symlink to the plugin_cache_dir.
 Any new projects with required_providers that exist in plugin_cache_dir will have near instant init times.
 An advanced use case of terraformrc is to configure filesystem_mirror as a provider installation source.

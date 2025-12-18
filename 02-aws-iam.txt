@@ -27,28 +27,50 @@ Lets get these resources created.
     #aws s3api get-bucket-versioning --bucket $(aws s3api list-buckets | jq -r '.Buckets[0].Name')
     #terraform output s3_id
     #aws s3api get-bucket-versioning --bucket $(terraform output -raw s3_id)
-When you stop or complete this project, delete all resources
+Everytime you stop working on this project or when you have completed this project, delete all resources
     #terraform destroy
 
 Lets switch back to our main project
+    #cd 02-aws-iam/
+Use the aws provider and set it up with shared config, creds, profile.
+    #vim providers.tf
+Lets configure an s3 bucket as the backend. https://developer.hashicorp.com/terraform/language/backend/s3
+To run terraform commands in other project directories, use the -chdir flag
+Lets re-apply our pre-init sub project.
+    #terraform -chdir=./pre-init apply
+    #terraform -chdir=./pre-init output s3_id
+Create backed s3 block with the bucket name from pre-init, any "path/state_file_name" as key, aws region of bucket, and lockfile toggle
+    #vim providers.tf
+If you are not using the default s3_prefix value to create a bucket
+    #terraform -chdir=./pre-init apply -var 's3_prefix=custom-name'
+    #terraform -chdir=./pre-init output s3_id
+    #terraform -chdir=./pre-init output -raw s3_id | { read S3_ID; sed -i "s/\(bucket *= *\"\).*\(\"\)/\1$S3_ID\2/" providers.tf
+    #sed -i "s/\(bucket *= *\"\).*\(\"\)/\1$(terraform -chdir=./pre-init output -raw s3_id)\2/" providers.tf
+Or if you already have a bucket created with a different name, overwrite the backend bucket value
+    #sed -i "s/\(bucket *= *\"\).*\(\"\)/\1$(echo "<external_bucket_name>")\2/" providers.tf
+The need to excessively use backslash makes this sed hard to read.
+The LHS of sed looks for "bucket+spaces( *)+equal(=)+spaces( *)+quotes(\")+any_char(.*)+quotes(\")" to replace.
+The LHS of sed also creates 2 capture groups using brackets, ie, "\(...\) and \(...\)". 1st is (bucket *= *\") and 2nd is (\").
+The RHS of sed writes "1st_capture(\1)+output_of_command($(echo "name")+2nd_capture(\2)"
+This sed allows the command to work if terraform fmt is run or not. It also allows you to retain any comments on the same line.
+Now that provider and backend has been configured, initialize the project.
+    #terraform init
 
-Lets use S3 for maintaining the backend of our aws terraform projects. https://developer.hashicorp.com/terraform/language/backend/s3
-If backend config is changed, you will have to perform init again.
-To ignore previous
-    #terraform init -reconfigure
-To migrate-state
+If at a later time you update the backend config to a different bucket or to a different backend type, terraform init must be re-run.
+If modification is to migrate the state files of current project to a different backend,
     #terraform init -force-copy
+The actual flag to use is -migrate-state, but it is implied when using the flag -force-copy
+In fact, -migrate-state is implied even when you run terraform init without any flags.
+You could also use the same code/project to manage resources in a different aws account/region with a different backend.
+    #terraform init -reconfigure
+This will wipe the state file and disconnect the current terraform project from all resources/modules of the previous project.
 
-date | { read DATE_VAL; sed -i "s/^\(key1 = \).*/\1$DATE_VAL/" your_config_file.txt; }
-sed -i "s/^\(key1 = \).*/\1$(date)/" your_config_file.txt
-
-    #vim .terraformrc
-
-
-The .terraform folder contains the the plugin of the aws provider, which takes up 750Mb of disk space.
-
+Lets create the first resource of our iam project
 Using the aws_iam_user resource, create a user. name is a required argument. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user
     #vim iam.tf
+path argument is optional and does not affect how the user access is utilized.
+path argument is an attribute that allows for tree structued policy managment of iam_user and iam_groups.
+
 Create the resources and check if they have been created via console or cli
     #terraform apply
     #terraform state
