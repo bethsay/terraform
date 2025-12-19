@@ -400,6 +400,10 @@ The output.items can be All files in local.path or some files files of fileset f
 Update the output block with this change
     #vim outputs.tf
     #terraform apply -var-file values.txt
+Output blocks cannot be referenced in terraform console.
+    #terraform console
+        #output.items
+            ->Error is expected
 After an apply, the output is also recorded as part of the state. To view them, you can
     #terraform output
     #terraform output items
