@@ -60,8 +60,8 @@ If at a later time you update the backend config to a different bucket or to a d
 If modification is to migrate the state files of current project to a different backend,
     #terraform init -force-copy
 The actual flag to use is -migrate-state, but it is implied when using the flag -force-copy
-In fact, -migrate-state is implied even when you run terraform init without any flags.
-You could also use the same code/project to manage resources in a different aws account/region with a different backend.
+If you terraform destroy your entire project and the backend bucket, and later want to init with a different backend,
+Or if you use the same code/project to manage resources in a different aws account/region with a different backend.
     #terraform init -reconfigure
 This will wipe the state file and disconnect the current terraform project from all resources/modules of the previous project.
 
@@ -79,7 +79,7 @@ Create the resources and check if the user have been created via console or cli
     #aws iam list-users
     #aws iam get-user help
     #aws iam list-users | jq -r '.Users[].UserName' | xargs -L 1 aws iam get-user --user-name
-Lets create output blocks to retrun the id and arn of the created user.
+Lets create output blocks to retrun the id and arn of the created user. arn is amazon resource name
     #vim outputs.tf
 Lets also create variables for name, path, and force_destroy to be used in aws_iam_user resource
     #vim variables.tf
@@ -90,13 +90,6 @@ Lets also create variables for name, path, and force_destroy to be used in aws_i
 If you are taking a break from working on iam project and want to cleanup, destroy the resources here and of pre-init
     #terraform destroy -auto-approve && terraform -chdir=./pre-init destroy -auto-approve
 
-For the user to access aws, we can grant api_access and/or console_access.
-Create bool variables for api_access and console_access which defaults to true.
-    #vim variables.tf
-    #terraform console
-        #var.api_access
-        #var.console_access
-
 For the user to have programmatic access, they will need to generate an access key and its corresponding secret.
     #aws iam list-access-keys --user-name $(terraform output -raw user_name)
     #aws iam create-access-key --user-name $(terraform output -raw user_name)
@@ -104,8 +97,13 @@ For the user to have programmatic access, they will need to generate an access k
     #aws iam delete-access-key --user-name $(terraform output -raw user_name) --access-key-id $(!-1 | jq -r '.AccessKeyMetadata[].AccessKeyId')
         ->"!-1" is a history substitution. Bash will replace it with the latest command from current sessions history.
         ->This delete-access-key command will fail if list-access-keys command was not the previous command.
+Create bool variable for api_access which defaults to true.
+    #vim variables.tf
+    #terraform console
+        #var.api_access
+        #var.console_access
 Create aws_iam_access_key resource with the aws_iam_user.first.id. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key
-Set its count as 1 if api_access is true, else count should be 0
+Set its count as 1 if var.api_access is true, else count should be 0
     #vim iam.tf
     #terraform apply
     #terraform state show aws_iam_access_key.first[0]
@@ -118,8 +116,8 @@ To show secret of aws_iam_access_key in output block, the sensitive argument mus
     #vim output.tf
     #terraform apply
     #terraform output
-    #terraform output user_api_access
-    #terraform output user_api_secret
+    #terraform output api_access
+    #terraform output api_secret
 You can see that the sensitive output stays hidden after apply and output all but is shown when you specifically output it.
 
 For the user to be able to login to aws console, We can generate a login_profile for them to use.
@@ -128,7 +126,12 @@ For the user to be able to login to aws console, We can generate a login_profile
         ->password must have uppercase and lowecase letters, numbers, symbols
     #aws iam get-login-profile --user-name $(terraform output -raw user_name)
     #aws iam delete-login-profile help --user-name $(terraform output -raw user_name)
+Create bool variable for console_access which defaults to true.
+    #vim variables.tf
+    #terraform console
+        #var.console_access
 Create aws_iam_user_login_profile resource aws_iam_user.first.id. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user_login_profile
+Set its count as 1 if var.console_access is true, else count should be 0
     #vim iam.tf
     #terraform apply
     #terraform state show aws_iam_user_login_profile.first[0]
@@ -137,12 +140,53 @@ Create aws_iam_user_login_profile resource aws_iam_user.first.id. https://regist
 Create an output block to share console_password as a sensitive value.
     #vim output.tf
     #terraform apply
-    #terraform output user_password
-Lets also generate the aws console signin URL
+    #terraform output console_password
+To sign into aws console, you need account_alias or 12-digit account_id along with the user_name and password.
+    #aws iam list-account-aliases
+    #aws sts get-caller-identity
+While the aws account may or may not have a max of one account_alias, you are guaranteed to have the 12-digit account_id.
+Using aws_caller_identity data source, we can fetch account_id. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity
+    #vim iam.tf
+Using aws_iam_account_alias data source, we could fetch account_alias. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_account_alias
+    #vim iam.tf
+If account_alias doesn not exist, you can create it
+    #aws iam list-account-aliases
+    #aws iam create-account-alias --account-alias <globally-unique-name>
+    #aws iam list-account-aliases
+Lets see if the data sources are working,
+    #terraform apply
+    #terraform state show data.aws_caller_identity.first
+    #terraform state show data.aws_iam_account_alias.first
+But if account_alias doesn not exist, this working IaC will break.
+    #aws iam list-account-aliases
+    #aws iam delete-account-alias --account-alias $(!-1 | jq -r '.AccountAliases[0]')
+    #terraform apply
+    #aws iam create-account-alias --account-alias <globally-unique-name>
+We do not use aws_iam_account_alias resource block, as this would create unexpected changes for users not governed by this project.
+To fetch account_alias without breaking the code, lets run the aws command using the external data source
+Lets add external provider to our required_providers block.
+    #vim providers.tf
+Disable/Comment the aws_iam_account_alias data source.
+Create an external data source to run the list-account-aliases command in bash
+    #aws iam list-account-aliases | jq '{alias : .AccountAliases[0]}'
+    #vim iam.tf
+    #terraform apply
+    #terraform state show data.external.account_alias
+Lets create a local that generates the signin url, by prependending signing.aws.amazon.com with account_alias and/or account_id.
+    #terraform console
+        #compact([data.external.account_alias.result.alias, data.aws_caller_identity.first.id])
+        #formatlist("https://%s.signin.aws.amazon.com/console", compact([data.external.account_alias.result.alias, data.aws_caller_identity.first.id]))
+    #vim iam.tf
+Lets create output blocks to share these signin urls
+    #vim output.tf
+    #terraform apply
+    #terraform output -json console_url
+    #terraform output -json console_url | jq -r '.[0],.[1]'
+    #terraform output console_password
+    #terraform output user_name
+Now try any of the console_url in the browser and test if user_name and console_password are working
 
-Also, lets generate the signin URL
-
-
+--#--Uncomment backend block from providers.tf--#--
 
 To generate aws user policies, Use https://awspolicygen.s3.amazonaws.com/policygen.html
 

@@ -4,6 +4,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~>6.23"
     }
+    external = {
+      source  = "hashicorp/external"
+      version = "~>2.3"
+    }
   }
   backend "s3" {
     bucket = "terraform-backend-58fd44e0"
@@ -24,3 +28,4 @@ provider "aws" {
     }
   }
 }
+provider "external" {}

@@ -18,13 +18,15 @@ resource "aws_iam_user_login_profile" "first" {
   # password_reset_required = true
 }
 
-# data "aws_iam_account_alias" "first" {}
-
 data "aws_caller_identity" "first" {}
 
+# data "aws_iam_account_alias" "first" {}  #tfPlan Error expected when alias does not exist
+data "external" "account_alias" {
+  program = ["/bin/bash", "-c", "aws iam list-account-aliases | jq '{alias : .AccountAliases[0]}'"]
+}
+
 locals {
-  # signin_url = format("https://%s.signin.aws.amazon.com/console", try(data.aws_iam_account_alias.first.id, data.aws_caller_identity.first.id))
-  signin_url = format("https://%s.signin.aws.amazon.com/console", data.aws_caller_identity.first.id)
+  signin_url = formatlist("https://%s.signin.aws.amazon.com/console", compact([data.external.account_alias.result.alias, data.aws_caller_identity.first.id]))
 }
 # resource "aws_iam_user_policy_attachment" "first" {
 #   user       = aws_iam_user.first.name
