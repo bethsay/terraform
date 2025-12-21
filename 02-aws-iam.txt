@@ -186,6 +186,13 @@ Lets create output blocks to share these signin urls
     #terraform output user_name
 Now try any of the console_url in the browser and test if user_name and console_password are working
 
+iam_user authentication part is done, authorization part is next.
+But before that, we must consider secure transfer of these sensitive outputs.
+Both aws_iam_access_key and aws_iam_user_login_profile resources have an argument to accept pgp_key.
+
+we must have a way to transfer these sensitive 
+We have now completed iam_user authentication. But before ad
+
 --#--Uncomment backend block from providers.tf--#--
 
 To generate aws user policies, Use https://awspolicygen.s3.amazonaws.com/policygen.html
@@ -196,3 +203,129 @@ The access of these codeified users will allow us to create and manage any resou
 Lets create a project which we can use to manage new IAM users and their permission
 
 
+||=============================================================================================
+||------------Extras: Basic CRUDS of GPG keys------------
+||When you want to securely share sensitive information/files with trusted people,
+||you can use GnuPrivacyGuard. It is an implementation of OpenPGP standard.
+||    #apt install gnupg
+||
+||--Create your Keys--
+||All parties who will participate in this secure communication need to generate their own gpg keypairs.
+||    #gpg --full-generate-key
+||        ->RSA, 4096 bit, Expiry, FullName, email, Comment, Pin/Passphrase
+||This generate 2 key pairs.
+||The Primary/Main  public-private pair is used for signing/certifying and
+||the Secondary/Sub public-private pair is used for encryption
+||    #gpg --list-keys
+||    #gpg --list-public-keys
+||    #gpg --list-secret-keys
+||If the data used to create these keys have to be corrected, the only way is to create a new set.
+||To see the 8-digit(short,0xshort) or 16-digit(long,0xlong) identifier of public keys,
+||    #gpg --list-keys --keyid-format <short|0xshort|long|0xlong>
+||To see the full identifier/fingerprint of primary and secondary public keys,
+||    #gpg --list-keys --fingerprint --fingerprint
+||The data used to create the gpg key cannot be modfied but there isnt a limit on creating new keypairs.
+||If you want to delete the keypairs with the intent to replace them,
+||    #gpg --delete-secret-and-public-keys <key-id>
+||If you ever plan on migrating to a new system, you could generate new keys.
+||OR, You could export your private/secret keys from your current system.
+||    #gpg --output <path/to/name.key> --armor --export-secret-keys
+||Transfer it along with all your trusted public keys into your new system and import them all.
+||    #gpg --import <path/to/name.key>
+||After successfully importing all public-private keys to your system, wipe/delete all keys stored in your old machine.
+||    #gpg --list-secret-keys --keyid-format short
+||    #gpg --delete-secret-key <key-id>
+||
+||--Publish/Share your Public Keys--
+||Now all the people who know and trust each other with share their public keys.
+||    #gpg --list-public-keys --keyid-format short
+||    #gpg --output <path/to/name.pub> --export <key-id>
+||You may use either of the 2 ids, the output file will contain both public keys.
+||GPG keys and operations are all in binary format. The using the --armor flag will perform a binary to ASCII encoding.
+||    #gpg --output <path/to/name.pub> --armor --export <key-id>
+||This will allow you to share the pub keys as text or comply with any policies of not sharing or recieving binary files.
+||Download the public keys of your trusted people and import it into your system
+||    #gpg --import <path/to/name.pub>
+||To delete any imported public key
+||    #gpg --list-keys --keyid-format short
+||    #gpg --delete-key <key-id>
+||Now that the public keys have be shared among all trusted parties, Lets see a basic use of Encryption and Signing
+||
+||----Secure transfer of Sensitive Information (Encryption)----
+||Foo gets a ticket from Bar requesting onboarding to a platform. Foo creates userid and password for Bar.
+||    #vim platform-creds-bar.csv
+||Foo has to update the ticket with the creds in such a way that only Bar can use it.
+||Foo can achieve this by encrypting the creds.csv with Bars public keys and publish the file in the ticket.
+||Others can see the ticket and fetch the file, but only Bar can decrypt it and use it contents.
+||Foo checks if he has public gpg keys from Bar
+||    #gpg --list-keys --keyid-format short
+||If not, he asks Bar to share it.
+||To perform and encryption, you need the name of the <file> and the <uid> of the recipient.
+||The <uid> is made up of the Full Name, Comment and email of the recipient.
+||The <uid> must be passed within quotes and only needs a unique subset of it.
+||Any of the below commands can encrypt a file.
+||    #gpg --recipient '<uid>' --encrypt <file>
+||        ->Creates file.gpg in pwd as a binary encrypted copy of file.
+||    #gpg --recipient-file <person.pub> --encrypt <file>
+||        ->For when you have the public key file to be used for encryption and dont intent to import the public key.
+||    #gpg --armor --recipient '<uid>' --encrypt <file>
+||        ->Creates file.asc in pwd as a ASCII encrypted copy of file. Allows sharing as text and passing any file scans.
+||    #gpg --output <path/to/file> --armor --recipient '<uid>' --encrypt <file>
+||        ->Allows for customising path, filename and extention of the encrypted file.
+||Foo encrypts the platform_access-bar-creds file using Bars public key
+||    #gpg --output ~/public/bar-cred.asc --armor --recipient 'bar@company' --encrypt platform-creds-bar.csv
+||Foo attaches bar-creds.asc file to the ticket and informs Bar that platform access is within the file.
+||Bar downloads the bar-creds.asc file from the ticket and decrypts it with their private key
+||    #gpg --output ~/Documents/platform-access.csv --decrypt bar-creds.asc
+||        ->If --output flag is skipped, the decrypted file would have the same name without the asc extention.
+||
+||----Secure Broadcast of Sensitive Information (Signing+Encryption)----
+||Foo creates a detailed plan for platform maintenance and downtime.
+||    #vim platform-downtime-schedule.txt
+||Foo publishes this in the Alerts Dashboard which will only accept messages signed by users it trusts.
+||Signed messages are created by encrypting the message file with the private key of sender.
+||Any of the below commands can sign a file.
+||    #gpg --sign <file>
+||        ->Creates file.sig in pwd as a binary singed and encrypted copy of file.
+||    #gpg --armor --sign <file>
+||        ->Creates file.asc in pwd as a ASCII encrypted copy of file. Allows sharing as text and passing any file scans.
+||    #gpg --output <path/to/file.asc> --armor --sign <file>
+||        ->Allows for customising path, filename and extention of the signed and encrypted file.
+||Foo signs and encrypts the platform-downtime-schedule file using their own private key
+||    #gpg --output ~/public/platform-alert.asc --armor --sign platform-downtime-schedule.txt
+||Foo uploads the platform-alert.asc file into the Alerts Dashboard.
+||The Alerts Dashboard and other people who get the message can verify if the message was created by Foo and has not been tampered with.
+||    #gpg --verify <signed-file>
+||        ->In stdout you will see the fingerprint of the signing key, time of signing and good/bad status of the signed/encrypted file
+||    #gpg --verify platform-alert.asc
+||If the signature is good, we can view the contents of the message.
+||    #gpg --decrypt <signed-file>
+||        ->If the signed-file is good, its contents and the signature details are displayed on stdout.
+||Better than viewing the file contents would be to save it.
+||    #gpg --output <path/to/file> --verify <signed-file>
+||    #gpg --output <path/to/file> --decrypt <signed-file>
+||        ->Signature status is shared in STDOUT + save the contents of the signed-file into path/to/file
+||    #gpg --output ~/Documents/alert.txt --verify platform-alert.asc
+||        ->If --output flag is skipped, the decrypted contents
+||
+||----Broadcast of Non-Sensitive Information (Signing)----
+||When you want to share information that is not sensitive but need to include that you are the author,
+||    #gpg --clearsign <file>
+||This will create file.asc that has your gpg signature in ASCII format appended to the bottom of the file.
+||After you share the file.asc, any person who has a copy of your sign can ensure that it was signed by you with
+||    #gpg --verify <clearsigned-file>
+||If the non-sensitive information is code meant to be used, adding a signature to it can break the file.
+||In this case you can create your signature as a seperate file, but is tied to the contents of the original file.
+||In this case you can send the file and signature as seperate files.
+||    #gpg --detach-sign <file>
+||        ->Creates file.sig in pwd as a binary signature that is based on file contents
+||    #gpg --armor --detach-sign <file>
+||        ->Creates file.asc in pwd as a ASCII signature that is based on file contents
+||    #gpg --output <path/to/file.asc> --armor --detach-sign <file>
+||        ->Allows for customising path, filename and extention of the signature file.
+||Now you have to share the the original file along with the file.asc/file.sig. People can verify it with
+||    #gpg --verify <detached-signature-file> <corresponding-content-file>
+||        ->Skipping the corresponding-content-file is allowed if it has the same name as that of the signature-file without the extention
+||If the clearsigned file or the corresponding-content-file is modified after you have signed it,
+||You will see "Bad Signature" message when performing a gpg --verify
+||
