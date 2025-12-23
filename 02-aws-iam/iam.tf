@@ -9,13 +9,14 @@ resource "aws_iam_user" "first" {
 resource "aws_iam_access_key" "first" {
   count = var.api_access ? 1 : 0
   user = aws_iam_user.first.name
+  pgp_key                 = try(filebase64(var.encryption_key), "")
 }
 
 resource "aws_iam_user_login_profile" "first" {
   count = var.console_access ? 1 : 0
   user                    = aws_iam_user.first.name
-  # pgp_key                 = "keybase:your_keybase_username" # Replace with your Keybase username
-  # password_reset_required = true
+  password_reset_required = true
+  pgp_key                 = try(filebase64(var.encryption_key), "")
 }
 
 data "aws_caller_identity" "first" {}
@@ -25,9 +26,6 @@ data "external" "account_alias" {
   program = ["/bin/bash", "-c", "aws iam list-account-aliases | jq '{alias : .AccountAliases[0]}'"]
 }
 
-locals {
-  signin_url = formatlist("https://%s.signin.aws.amazon.com/console", compact([data.external.account_alias.result.alias, data.aws_caller_identity.first.id]))
-}
 # resource "aws_iam_user_policy_attachment" "first" {
 #   user       = aws_iam_user.first.name
 #   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"

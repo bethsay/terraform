@@ -111,8 +111,8 @@ Set its count as 1 if var.api_access is true, else count should be 0
     #aws iam list-access-keys --user-name $(terraform output -raw user_name)
     #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_iam_access_key.first[0]") | .values'
     #terraform show -json | jq '.values.root_module.resources[] | select(.address=="aws_iam_access_key.first[0]") | .values | {access_key: .id, secret_key: .secret}'
-Create output block to show id of aws_iam_access_key. Use try function to set the output value of null if aws_iam_access_key doesnt exist.
-To show secret of aws_iam_access_key in output block, the sensitive argument must be set to true. Use try function here as well.
+Create output block to show id of aws_iam_access_key. Use one function to get the id of aws_iam_access_key if it exists.
+To show secret of aws_iam_access_key in output block, the sensitive argument must be set to true. Use one function here as well.
     #vim output.tf
     #terraform apply
     #terraform output
@@ -130,13 +130,18 @@ Create bool variable for console_access which defaults to true.
     #vim variables.tf
     #terraform console
         #var.console_access
-Create aws_iam_user_login_profile resource aws_iam_user.first.id. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user_login_profile
-Set its count as 1 if var.console_access is true, else count should be 0
+Create aws_iam_user_login_profile resource. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user_login_profile
+Set user as aws_iam_user.first.id and password_reset_required as true.
+Set its count as 1 if var.console_access is true, else count should be 0.
     #vim iam.tf
     #terraform apply
     #terraform state show aws_iam_user_login_profile.first[0]
     #terraform show -json | jq -r '.values.root_module.resources[] | select(.address=="aws_iam_user_login_profile.first[0]") | .values.password'
     #aws iam get-login-profile --user-name $(terraform output -raw user_name)
+Since password_reset_required is true, the password can only be used once.
+If the user forgets the updated password and needs us to reset it,
+    #terraform apply -replace 'aws_iam_user_login_profile.first[0]'
+Also, the user is blocked from resetting their own password until we assign policies to do so.
 Create an output block to share console_password as a sensitive value.
     #vim output.tf
     #terraform apply
@@ -162,7 +167,7 @@ But if account_alias doesn not exist, this working IaC will break.
     #aws iam delete-account-alias --account-alias $(!-1 | jq -r '.AccountAliases[0]')
     #terraform apply
     #aws iam create-account-alias --account-alias <globally-unique-name>
-We do not use aws_iam_account_alias resource block, as this would create unexpected changes for users not governed by this project.
+We do not use aws_iam_account_alias resource block, as this would create unplanned changes for users not governed by this project.
 To fetch account_alias without breaking the code, lets run the aws command using the external data source
 Lets add external provider to our required_providers block.
     #vim providers.tf
@@ -173,25 +178,34 @@ Create an external data source to run the list-account-aliases command in bash
     #terraform apply
     #terraform state show data.external.account_alias
 Lets create a local that generates the signin url, by prependending signing.aws.amazon.com with account_alias and/or account_id.
+coalesce function returns the first value that is not  null or empty string. https://developer.hashicorp.com/terraform/language/functions/coalesce
+compact  function returns a list that does not contain null or empty string. https://developer.hashicorp.com/terraform/language/functions/compact
     #terraform console
+        #coalesce(data.external.account_alias.result.alias, data.aws_caller_identity.first.id)
+        #format("https://%s.signin.aws.amazon.com/console", coalesce(data.external.account_alias.result.alias, data.aws_caller_identity.first.id))
         #compact([data.external.account_alias.result.alias, data.aws_caller_identity.first.id])
         #formatlist("https://%s.signin.aws.amazon.com/console", compact([data.external.account_alias.result.alias, data.aws_caller_identity.first.id]))
     #vim iam.tf
 Lets create output blocks to share these signin urls
     #vim output.tf
     #terraform apply
+    #terraform output user_name
+    #terraform output console_password
+If you have used compact function
     #terraform output -json console_url
     #terraform output -json console_url | jq -r '.[0],.[1]'
-    #terraform output console_password
-    #terraform output user_name
+If you have used coalesce function
+    #terraform output console_url
 Now try any of the console_url in the browser and test if user_name and console_password are working
 
 iam_user authentication part is done, authorization part is next.
 But before that, we must consider secure transfer of these sensitive outputs.
-Both aws_iam_access_key and aws_iam_user_login_profile resources have an argument to accept pgp_key.
-
-we must have a way to transfer these sensitive 
-We have now completed iam_user authentication. But before ad
+If we have the gpg/pgp public keys of the recipient, we can encrypt these outputs.
+Check the Extras at the bottom if you need steps to create and use gpg keys.
+pgp_key is an argument available on aws_iam_access_key and aws_iam_user_login_profile resources
+pgp_key accpets the base64 encoding of public key. Do use the armor encoded version or the base64 encoding of the armor encoded pgp key.
+Create a variable to accept encryption_key
+    #vim variables.tf
 
 --#--Uncomment backend block from providers.tf--#--
 
@@ -239,13 +253,16 @@ Lets create a project which we can use to manage new IAM users and their permiss
 ||--Publish/Share your Public Keys--
 ||Now all the people who know and trust each other with share their public keys.
 ||    #gpg --list-public-keys --keyid-format short
-||    #gpg --output <path/to/name.pub> --export <key-id>
+||    #gpg --output <path/to/name.gpg> --export <key-id>
+||    #gpg --output ~/Public/foo-pubkey.gpg --export <key-id>
 ||You may use either of the 2 ids, the output file will contain both public keys.
 ||GPG keys and operations are all in binary format. The using the --armor flag will perform a binary to ASCII encoding.
-||    #gpg --output <path/to/name.pub> --armor --export <key-id>
+||    #gpg --output <path/to/name.asc> --armor --export <key-id>
+||    #gpg --output ~/Public/foo-pubkey.asc --armor --export <key-id>
 ||This will allow you to share the pub keys as text or comply with any policies of not sharing or recieving binary files.
 ||Download the public keys of your trusted people and import it into your system
-||    #gpg --import <path/to/name.pub>
+||    #gpg --import <path/to/name.gpg>
+||    #gpg --import ~/Downloads/bar-pubkey.gpg
 ||To delete any imported public key
 ||    #gpg --list-keys --keyid-format short
 ||    #gpg --delete-key <key-id>
@@ -286,7 +303,7 @@ Lets create a project which we can use to manage new IAM users and their permiss
 ||Signed messages are created by encrypting the message file with the private key of sender.
 ||Any of the below commands can sign a file.
 ||    #gpg --sign <file>
-||        ->Creates file.sig in pwd as a binary singed and encrypted copy of file.
+||        ->Creates file.sig in pwd as a binary signed and encrypted copy of file.
 ||    #gpg --armor --sign <file>
 ||        ->Creates file.asc in pwd as a ASCII encrypted copy of file. Allows sharing as text and passing any file scans.
 ||    #gpg --output <path/to/file.asc> --armor --sign <file>

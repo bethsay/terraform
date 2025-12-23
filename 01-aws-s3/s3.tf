@@ -31,7 +31,7 @@ resource "random_pet" "third" {
 }
 
 resource "aws_s3_bucket" "third" {
-  # # # for_each = toset(["${lower(replace(random_id.third.b64_url, "_", "-"))}", "${random_pet.third.id}"])
+  # # # for_each = toset([lower(replace(random_id.third.b64_url, "_", "-")), random_pet.third.id])
   # # # bucket = each.key
   # # for_each = local.mys3_id_map_third
   # # bucket = each.value
@@ -44,16 +44,16 @@ resource "aws_s3_bucket" "third" {
 
 locals {
   # mys3_id_map_third = tomap({
-  #   third_id = "${lower(replace(random_id.third.b64_url, "_", "-"))}"
-  #   third_pet = "${random_pet.third.id}"
+  #   third_id = lower(replace(random_id.third.b64_url, "_", "-"))
+  #   third_pet = random_pet.third.id
   # })
   # mys3_id_list_third = tolist([
-  #   "${lower(replace(random_id.third.b64_url, "_", "-"))}",
-  #   "${random_pet.third.id}",
+  #   lower(replace(random_id.third.b64_url, "_", "-")),
+  #   random_pet.third.id,
   # ])
   mys3_id_list_third = compact(tolist([
-    "${try(lower(replace(random_id.third[0].b64_url, "_", "-")), null)}",
-    "${try(random_pet.third[0].id, null)}",
+    try(lower(replace(random_id.third[0].b64_url, "_", "-")), null),
+    one(random_pet.third[*].id),
   ]))
   # mys3_count_all = 1 + 2   # time+(words+string)
 }
@@ -73,8 +73,8 @@ data "external" "fourth" {
 
 locals {
   suffix_list_fourth = compact(tolist([
-    "${try(random_uuid.fourth[0].id, null)}",
-    "${try(data.external.fourth[0].result.uuidv5_ext, local.uuidv5_int)}",
+    one(random_uuid.fourth[*].id),
+    try(data.external.fourth[0].result.uuidv5_ext, local.uuidv5_int),
   ]))
 }
 
@@ -88,8 +88,8 @@ resource "aws_s3_bucket" "fourth" {
 locals {
   mys3_count_all = 1 + 2 + 2 # time+(words+string)+(uuid+uuidv5_int)
   mys3_id_all = compact(tolist(setunion(
-    [try(aws_s3_bucket.first[0].id, null)],
-    [try(aws_s3_bucket.second[0].id, null)],
+    [one(aws_s3_bucket.first[*].id)],
+    [one(aws_s3_bucket.second[*].id)],
     aws_s3_bucket.third[*].id,
     aws_s3_bucket.fourth[*].id
   )))

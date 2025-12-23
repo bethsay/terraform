@@ -1,11 +1,11 @@
 output "mys3_id_first" {
   # value = aws_s3_bucket.first.id
-  value = try(aws_s3_bucket.first[0].id, null)
+  value = one(aws_s3_bucket.first[*].id)
 }
 
 output "mys3_id_second" {
   # value = aws_s3_bucket.second.id
-  value = try(aws_s3_bucket.second[0].id, null)
+  value = one(aws_s3_bucket.second[*].id)
 }
 
 output "mys3_id_third" {

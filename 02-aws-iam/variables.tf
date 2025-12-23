@@ -23,3 +23,7 @@ variable "console_access" {
   default = true
 }
 
+variable "encryption_key" {
+  type = string
+  default = ""
+}

@@ -150,7 +150,7 @@ So, substitute "_" with "-" with the replace function and also use the lower fun
     #terraform console
         #random_id.third.b64_url
         #lower(replace(random_id.third.b64_url, "_", "-"))
-        #toset(["${lower(replace(random_id.third.b64_url, "_", "-"))}", "${random_pet.third.id}"])
+        #toset([lower(replace(random_id.third.b64_url, "_", "-")), random_pet.third.id])
     #vim s3.tf
     #terraform apply
     #terraform state list
@@ -173,7 +173,7 @@ Terraform apply will fail due to error at for_each of third aws_s3_buckets resou
 Arguments of a resource are allowed to refer attributes of other resources, this would be considered as an implicit dependency.
 Terraform would delay the creation of the downstream dependent resource until the upstream resource is created/modified and its attributes become available.
 But terraform plan/apply fails here, when for_each the meta-argument is referring to resource attributes. Why?
-(for_each + each.key) and (count + count.index) are evaluated and must be known before the creation of the dependency graph.
+(for_each + each.key) and (count + count.index) must be evaluated and known before the creation of the dependency graph.
 Their result decides what the names and labels of the resources must be, without which is dependency graph will be incomplete.
 There are 3 solutions for this for_each error.
   Solution 1 : Avoid for_each
@@ -183,8 +183,8 @@ There are 3 solutions for this for_each error.
     To correct the error we replace the set in for_each with a map of known/static keys.
         #terraform destroy
         #terraform console
-            #toset(["${lower(replace(random_id.third.b64_url, "_", "-"))}", "${random_pet.third.id}"])
-            #tomap({ third_id = "${lower(replace(random_id.third.b64_url, "_", "-"))}", third_pet = "${random_pet.third.id}" })
+            #toset([lower(replace(random_id.third.b64_url, "_", "-")), random_pet.third.id])
+            #tomap({ third_id = lower(replace(random_id.third.b64_url, "_", "-")), third_pet = random_pet.third.id })
     Defining the map as a local will improve code readability. Name of the bucket should now be each.value
         #vim s3.tf
         #terraform apply
@@ -196,9 +196,11 @@ There are 3 solutions for this for_each error.
     Another solution is to replace the "for_each = toset()" with count whose value is the length of a list.
         #terraform destroy
         #terraform console
-            #toset(["${lower(replace(random_id.third.b64_url, "_", "-"))}", "${random_pet.third.id}"])
-            #length(tolist(["${lower(replace(random_id.third.b64_url, "_", "-"))}", "${random_pet.third.id}"]))
+            #toset([lower(replace(random_id.third.b64_url, "_", "-")), random_pet.third.id})
+            #tolist([lower(replace(random_id.third.b64_url, "_", "-")), random_pet.third.id])
     Define the list as a local. Set the count as length(local.list) and the name of buckets as list items at count.index
+        #terraform console
+            #length(mys3_id_list_third)
         #vim s3.tf
         #terraform apply
     The value of output.mys3_id_third no longer needs the values() function.
@@ -216,7 +218,7 @@ But before that, I want to address a logical issue with the project so far.
 To create a bucket with a unique name and we have used 3 methods.
 And this resulted in the creation of three unique buckets, where we only needed one.
 We need to be able choose one of three suffix methods to create one bucket.
-Conditional Expression is our solution https://developer.hashicorp.com/terraform/language/expressions/conditionals.
+Conditional Expression is our solution. https://developer.hashicorp.com/terraform/language/expressions/conditionals.
 Create a string type variable that enables us to choose the kind of suffix.
 Apply a validation condition so that an error_message is shown for requests of unknown suffix_type. https://developer.hashicorp.com/terraform/language/validate
 The contains function allows us to define a list of allowed suffix_type, ie, [all, none, time, words, string]. https://developer.hashicorp.com/terraform/language/functions/contains
@@ -244,33 +246,44 @@ Conditional expression in aws_s3_bucket.third will be applied after some conside
     #terraform plan
     #terraform plan -var 'suffix_type=none'
 Because of this change, the 4 individual resource objects have become 4 lists of objects that contain a singluar element or might be empty.
-Also, evaluating expressions on resources that may or may not exist will causes errors during terraform plan/apply. We a error handling function
-Try function handles mutiple expressions and will have the result of the first expression that doesnt fail. https://developer.hashicorp.com/terraform/language/functions/try
-Avoid using the splat operator (ie [*] or wildcard) when you know the list will ever have only one element.
-Pass the current expressions of output.mys3_id_first, output.mys3_id_second and local.id_list_third as the primary to the try function.
-Update the primary expression of all try functions to evaluate the 0th element of their upstream resources.
-And set null as the secondary/fallback expression in each try function.
-    #vim s3.tf
+Evaluating expressions on resources that may or may not exist will cause errors during terraform plan/apply.
+The one function checks a list/set and either returns its 0th element, or null. https://developer.hashicorp.com/terraform/language/functions/one
+    #terraform console
+        #one(aws_s3_bucket.first[*].id)
+        #one(aws_s3_bucket.second[*].id)
+Update output.mys3_id_first and output.mys3_id_second to run one function on first list and second lists of aws_s3_bucket resources.
     #vim outputs.tf
     #terraform plan
     #terraform plan -var 'suffix_type=none'
 Even when suffix_type=none, you will see aws_s3_bucket.third is planning to create 2 buckets without names.
-This is because even though random_id.third, random_pet.third are switched off, local.id_list_third has a length of 2 with null elements.
+This is because even though random_id.third, random_pet.third are switched off, local.mys3_id_list_third has a length of 2 with null elements.
+One function is useful in fetching the singluar element of a list/set if the element exists.
+But one function will cause errors if the list/set has a second element or if it has to evaluate an elements of a list/set.
+Due to this specialization it does not pair well with other functions. We need a better error handling function.
+Try function handles mutiple expressions and will have the result of the first expression that doesnt error out. https://developer.hashicorp.com/terraform/language/functions/try
+We can use the functions try or one or a combination of both to evaluate local.mys3_id_list_third.
+    #terraform console
+        #tolist([ try(lower(replace(one(random_id.third[*].b64_url), "_", "-")), null), one(random_pet.third[*].id), ])
+        #tolist([ try(lower(replace(random_id.third[0].b64_url, "_", "-")), null), try(random_pet.third[0].id, null), ])
+        #tolist([ try(lower(replace(random_id.third[0].b64_url, "_", "-")), null), one(random_pet.third[*].id), ])
+    #vim s3.tf
 We need count to be 2 when suffix_type is all, 1 when suffix_type is words or string, 0 when suffix_type is none or unknown
     #terraform console
         #(var.suffix_type=="all") ? 2 : ((var.suffix_type=="words"||var.suffix_type=="string") ? 1 : 0)
     #vim s3.tf
-Also use compact function to remove null from local.id_list_third. https://developer.hashicorp.com/terraform/language/functions/compact
-Now, aws_s3_bucket.third can use the random_pet.third.id as suffix when count is 1 instead of bucket name being empty.
+    #terraform apply -var 'suffix_type=words'
+    #terraform apply -var 'suffix_type=string'
+Also use compact function to remove all null elements from local.id_list_third. https://developer.hashicorp.com/terraform/language/functions/compact
     #vim s3.tf
+Now, aws_s3_bucket.third can use the random_pet.third.id as suffix when count is 1 instead of bucket name being empty.
     #terraform apply
     #aws s3api list-buckets
     #terraform apply -var 'suffix_type=words'
     #terraform apply -var 'suffix_type=string'
     #terraform apply -var 'suffix_type=time'
     #aws s3api list-buckets
-When using words or string suffix_type, you would see output.mys3_id_second and output.mys3_id_first do not exist. Its because try function uses null.
-Using null as a fallback for output.mys3_id_third wont work as try function does not recognise an empty list of objects as a failure/error.
+When using words or string suffix_type, you would see output.mys3_id_second and output.mys3_id_first do not exist. Its because one function returns null.
+Using try function with null as fallback on output.mys3_id_third wont work because an empty set is not an error.
 A conditional expression can apply null as values if the length of aws_s3_bucket.third is 0
     #terraform console
         #length(aws_s3_bucket.third)==0 ? null : aws_s3_bucket.third[*].id
@@ -301,7 +314,7 @@ Lets include "uuidv5_int" as suffix_type and use it as a condition to set local.
     #vim s3.tf
     #terraform console -var 'suffix_type=uuidv5_int'
         #local.uuidv5_int
-If uuidv5 or some other processing you need is not availble within terraform, we have the option to run it and import its result.
+If uuidv5 or some other processing you need is not available within terraform, we have the option to run it externally and import its result.
 Using hashicorp/external provider allows us to specify the program and use its result as a data source. https://registry.terraform.io/providers/hashicorp/external/latest/docs
     #vim providers.tf
     #terraform init
@@ -317,10 +330,12 @@ Allow "uuidv5_ext" to be a valid suffix_type and use it to enable data.external.
 Now lets create buckets using these uuids
 Create a local.id_list_fourth that tries to get random_uuid.fourth[0].id, data.external.fourth[0].id and local.uuidv5_int, uses them as list elements and compacts it.
     #terraform console
-        #tolist([ "${try(random_uuid.fourth[0].id, null)}", "${try(local.uuidv5_int, null)}", "${try(data.external.fourth[0].result.uuidv5_ext, null)}" ])
-Actually data.external.fourth[0].id and local.uuidv5_int are the same and local.uuidv5_int already fallback to null. So combine these 2.
+        #tolist([ one(random_uuid.fourth[*].id), local.uuidv5_int, one(data.external.fourth[*].result.uuidv5_ext) ])
+Actually data.external.fourth and local.uuidv5_int are the same so lets combine the 2 to be a single element.
+Since calling data.external.fourth[0] can cause an error when suffix_type is not all or uuidv5_ext, lets use it as 1st expression of a try function.
+and since local.uuidv5_int can fallback to null when suffix_type is not all or uuidv5_int, use it as 2nd expression. We dont need to have a 3rd expression.
     #terraform console
-        #tolist(["${try(random_uuid.fourth[0].id, null)}", "${try(data.external.fourth[0].result.uuidv5_ext, local.uuidv5_int)}" ])
+        #tolist([ one(random_uuid.fourth[*].id), try(data.external.fourth[0].result.uuidv5_ext, local.uuidv5_int)}" ])
     #vim s3.tf
 Create a aws_s3_bucket resource that creates 2 buckets if suffix_type is all or 1 bucket is suffix_type starts with uuid.
 Use local.id_list_fourth elements with mys3_prefix_hyphen as the bucket argument. Also include the tags and force_destroy arguments.
@@ -338,7 +353,7 @@ Create output block to return the list of created bucket names if aws_s3_bucket 
 
 Improvement task:
 What if the 32 digit uuid is too big or not pretty enough to be used as bucket name?
-You can split it into 5 elements of 8-4-4-4-12 digits and use the first_block or last_block as suffix
+You can split it into 5 elements of 8-4-4-4-12 hex digits and use the first_block or last_block as suffix
 You can also remove the hyphens and count any number of digits from the front or back and us that as suffix for your bucket.
 You may use this bash command as your uuidv5_ext and maybe figure out the same results for uuidv5_int and random uuid.
     #uuidgen -s -n @oid -N "tf-bucket" | jq -R \
@@ -346,8 +361,8 @@ You may use this bash command as your uuidv5_ext and maybe figure out the same r
           uuidv5_ext_full: .,
           uuidv5_ext_fblock: (split("-")[0]),
           uuidv5_ext_lblock: (split("-")[4]),
-          uuidv5_ext_fcount: (gsub("-"; "")[:6]),
-          uuidv5_ext_bcount: (gsub("-"; "")[-6:]),
+          uuidv5_ext_fcount: (gsub("-"; "")[:10]),
+          uuidv5_ext_bcount: (gsub("-"; "")[-10:]),
       }'
 Figure out the terraform functions you would use to do the same conversions for local.uuidv5_int and random_uuid.fourth
 
@@ -362,11 +377,11 @@ Create a local to hold a list of any/all bucket names to be cycled in the bucket
 As we need to combine 2 strings with 2 lists, we will use setunion function with compact. https://developer.hashicorp.com/terraform/language/functions/setunion
 This combined list will be a good addition to our output as well.
     #terraform console
-        #setunion([try(aws_s3_bucket.first[0].id, null)], [try(aws_s3_bucket.second[0].id, null)], aws_s3_bucket.third[*].id, aws_s3_bucket.fourth[*].id)
-        #compact(setunion([try(aws_s3_bucket.first[0].id, null)], [try(aws_s3_bucket.second[0].id, null)], aws_s3_bucket.third[*].id, aws_s3_bucket.fourth[*].id))
+        #setunion([one(aws_s3_bucket.first[0].id)], [one(aws_s3_bucket.second[0].id)], aws_s3_bucket.third[*].id, aws_s3_bucket.fourth[*].id)
+        #compact(setunion([one(aws_s3_bucket.first[0].id)], [one(aws_s3_bucket.second[0].id)], aws_s3_bucket.third[*].id, aws_s3_bucket.fourth[*].id))
     #vim s3.tf
     #vim outputs.tf
-Create another local to be 5 when suffix_type is all and var.bucket_versioning is true, or 1 if only var.bucket_versioning is true else be 0
+Create another local to be 5 when suffix_type is all and var.bucket_versioning is true, or be 1 if only var.bucket_versioning is true else be 0
 We are using 5 as it would be the number of buckets created if suffix_type is all (time+word+string+uuid+uuidv5). Create a local that describes why 5 is used.
     #terraform console
         #(var.bucket_versioning && var.suffix_type=="all") ? 5 : ( var.bucket_versioning ? 1 : 0)
@@ -409,7 +424,7 @@ Create aws_s3_object resource. https://registry.terraform.io/providers/hashicorp
 Set count as local.bucket_upload_count.
 Set bucket argument to cycle through local.bucket_upload_set and pick the 0th element of each subset.
 Set source argument to cycle through local.bucket_upload_set and pick the 1st element of each subset.
-Set key argument to prefix a directory_name to the basenames of the 1st element of every subset of local.bucket_upload_set
+Set key argument to prefix a path to the basenames of the 1st element of every subset of local.bucket_upload_set
     #vim s3.tf
     #terraform apply -var 'suffix_type=string' -var 'bucket_upload=["../01-aws-s3.txt"]'
     #terraform state list
