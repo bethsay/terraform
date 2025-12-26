@@ -26,37 +26,18 @@ data "external" "account_alias" {
   program = ["/bin/bash", "-c", "aws iam list-account-aliases | jq '{alias : .AccountAliases[0]}'"]
 }
 
-# resource "aws_iam_user_policy_attachment" "first" {
-#   user       = aws_iam_user.first.name
-#   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
-# }
-#
-# locals {
-#   policy_arns = [
-#     "arn:aws:iam::aws:policy/ElasticLoadBalancingFullAccess",
-#     "arn:aws:iam::aws:policy/AmazonRoute53FullAccess"
-#   ]
-# }
-#
-# resource "aws_iam_user_policy_attachment" "second" {
-#   for_each   = toset(local.policy_arns)
-#   user       = aws_iam_user.first.name
-#   policy_arn = each.key
-# }
-#
-# locals {
-#   policy_names = toset([
-#     "AmazonEC2FullAccess",
-#     "AmazonS3FullAccess",
-#     "AmazonRDSFullAccess",
-#   ])
-# }
-#
-# data "aws_iam_policy" "third" {
-#   for_each = local.policy_names
-#   name     = each.key
-# }
-#
+resource "aws_iam_user_policy_attachment" "first" {
+  user       = aws_iam_user.first.id
+  # policy_arn = "arn:aws:iam::aws:policy/IAMUserChangePassword"
+  count = length(var.aws_policy_names)
+  policy_arn = data.aws_iam_policy.first[count.index].arn
+}
+
+data "aws_iam_policy" "first" {
+  count = length(var.aws_policy_names)
+  name     = var.aws_policy_names[count.index]
+}
+
 # resource "aws_iam_user_policy_attachment" "third" {
 #   user       = aws_iam_user.first.name
 #   for_each   = local.policy_names

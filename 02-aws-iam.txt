@@ -101,7 +101,6 @@ Create bool variable for api_access which defaults to true.
     #vim variables.tf
     #terraform console
         #var.api_access
-        #var.console_access
 Create aws_iam_access_key resource with the aws_iam_user.first.id. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_access_key
 Set its count as 1 if var.api_access is true, else count should be 0
     #vim iam.tf
@@ -146,7 +145,11 @@ Create an output block to share console_password as a sensitive value.
     #vim output.tf
     #terraform apply
     #terraform output console_password
-To sign into aws console, you need account_alias or 12-digit account_id along with the user_name and password.
+Test console_password output by trying to sign-in to aws portal as IAM user
+Along with user_name, you need the 12-digit account_id during sign-in.
+Although password_reset_required is true, tf-user will not be able to as we have not yet authorized with a policy to do it.
+
+To get the 12-digit account_id or account_alias you need for IAM signin,
     #aws iam list-account-aliases
     #aws sts get-caller-identity
 While the aws account may or may not have a max of one account_alias, you are guaranteed to have the 12-digit account_id.
@@ -199,16 +202,85 @@ If you have used coalesce function
 Now try any of the console_url in the browser and test if user_name and console_password are working
 
 iam_user authentication part is done, authorization part is next.
-But before that, we must consider secure transfer of these sensitive outputs.
+But before that, we must consider how we securely transfer of these sensitive outputs.
 If we have the gpg/pgp public keys of the recipient, we can encrypt these outputs.
 Check the Extras at the bottom if you need steps to create and use gpg keys.
 pgp_key is an argument available on aws_iam_access_key and aws_iam_user_login_profile resources
-pgp_key accpets the base64 encoding of public key. Do use the armor encoded version or the base64 encoding of the armor encoded pgp key.
-Create a variable to accept encryption_key
+pgp_key accepts the base64 encoding of public key. Expect errors if you use the raw key, or the armor encoding of the key, or b64(armor(key))
+Create a string variable to accept local system path to the recipients public encryption key. Set the default value as an empty string.
     #vim variables.tf
+    #terraform console
+        #var.encryption_key
+Update aws_iam_user_login_profile and aws_iam_access_key resources with the pgp_key argument to be the result of filebase64(var.encryption_key)
+filebase64 function on an empty string or file that doesnt exist will cause errors. Use try function to apply an empty string as fallback.
+    #vim iam.tf
+    #terraform apply -var 'encryption_key=~/Downloads/recipient_name_public.gpg'
+If you dont have the public key of a recipient, you can test it with your public gpg key
+    #echo 'encryption_key="~/Public/my_name-public.gpg"' >> terraform.tfvars
+        ->all .tfvars files are gitignored
+    #terraform apply
+    #terraform output
+    #terraform state show aws_iam_user_login_profile.first[0]
+    #terraform show -json | jq -r '.values.root_module.resources[] | select(.address=="aws_iam_access_key.first[0]") | .values'
+    #terraform apply -var 'encryption_key=~/Public/my_name-public.gpg'
+The attributes secret and password, which we had used as output are now null while encrypted_secret and encrypted_password attributes have values.
+Create output blocks to share encrypted_secret and encrypted_password via one function.
+    #vim outputs.tf
+    #terraform apply
+    #terraform output console_password_encrypted
+These encrypted outputs can be used by the recipient after they run a base64 decode on it and then run gpg decrypt.
+    #terraform output -raw api_secret_encrypted | base64 -d | gpg -d
+    #terraform output -raw console_password_encrypted | base64 -d | gpg -d
 
---#--Uncomment backend block from providers.tf--#--
+Improvement task:
+Create an account in https://keybase.io/ and generate pgp keys.
+Use keybase:account_id as pgp_key instead of filebase64(key).
+decrypt with "keybase pgp decrypt" instead of "gpg -d"
 
+iam_user we created can be authenticated to our aws account but is not authorized to do anything.
+When using the password from login_profile successfully, you would have seen a password reset page that didnt work.
+Without being authorized with a policy with iam:ChangePassword action at the least, you cannot change your own password.
+    #
+Signin to the aws account with your root credentials. Go to the IAM dashboard -> Access Management -> Policies
+There are about 1400+ policies created and managed by AWS that are available for us to attach to any user or group.
+IAMUserChangePassword is an exisiting policy that allows a user to change their password. Get its arn for us to paste in our Iac
+Create aws_iam_user_policy_attachment resource. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user_policy_attachment
+Set user as aws_iam_user.first.id and policy_arn to that of IAMUserChangePassword
+    #vim iam.tf
+    #terraform apply
+Now you can try to login to aws, change your password and see the aws dashboard.
+    #terraform output console_url
+    #terraform output user_name
+    #terraform output -raw console_password_encrypted | base64 -d | gpg -d
+Lets grant more authorizations to iam_user by attaching more policies.
+To get the arn of the policies to attach, you could click on the policy you want to add and fetch it from the details page.
+or create it by adding the long arn prefix to the policy name, or fetch it from a data source.
+Create a list variable to accept the aws managed policy_names. Set the default value as an empty list/set.
+Add a validation to reject AdministratorAccess policy. This is a highly risky policy to be used.
+Add a validation to ensure at least IAMUserChangePassword is listed
+    #vim variables.tf
+    #echo 'aws_policy_names = [ "IAMUserChangePassword"]' >> terraform.tfvars
+    #terraform console
+        #var.aws_policy_names
+        #!contains(var.aws_policy_names, "AdministratorAccess")
+        #contains(var.aws_policy_names, "IAMUserChangePassword") || contains(var.aws_policy_names, "IAMFullAccess")
+Making the arn by adding the prefix to var.aws_policy_names is much faster, but would break if the policy is not in root path
+Create aws_iam_policy data source to fetch the arns. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy
+Set the count as length(var.aws_policy_names) and set the name to cycle through the elements of var.aws_policy_names.
+    #vim iam.tf
+    #terraform apply
+    #terraform show -json | jq -r '.values.root_module.resources[] | select(.address=="data.aws_iam_policy.first[0]") | .values'
+    #terraform state show data.aws_policy_names.first[0]
+Update aws_iam_user_policy_attachment.first with count as length(var.aws_policy_names),
+and cycle policy_arn through data.aws_iam_policy.first[] and use the arn from each of their elements.
+    #vim iam.tf
+    #terraform apply
+Lets attach more policies to the iam_user.
+    #sed -i "s/\(aws_policy_names *= *\[\).*\(\]\)/\1$(echo '"AmazonEC2FullAccess", "AmazonS3FullAccess", "IAMFullAccess"')\2/" terraform.tfvars
+    #terraform apply
+
+
+policies
 To generate aws user policies, Use https://awspolicygen.s3.amazonaws.com/policygen.html
 
 The iam_admin user that we had create via aws console is only authorized to create IAM users and S3 buckets.
