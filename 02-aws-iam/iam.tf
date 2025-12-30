@@ -38,39 +38,54 @@ data "aws_iam_policy" "first" {
   name     = var.aws_policy_names[count.index]
 }
 
-# resource "aws_iam_user_policy_attachment" "third" {
-#   user       = aws_iam_user.first.name
-#   for_each   = local.policy_names
-#   policy_arn = data.aws_iam_policy.third["${each.key}"].arn
-# }
-#
-# # resource "aws_iam_user_policy_attachment" "third-v2" {
-# #   user       = aws_iam_user.first.name
-# #   for_each   = toset([for pol in data.aws_iam_policy.third : pol.arn])
-# #   policy_arn = each.key
-# # }
-#
-# data "aws_iam_policy_document" "fourth" {
-#   statement {
-#     sid = "USeastContainers"
-#     actions = ["eks:*", "ecs:*", "ecr:*"]
-#     resources = ["*"]
-#     condition {
-#       test = "StringEquals"
-#       variable = "aws:RequestedRegion"
-#       values = ["us-east-1", "us-east-2"]
-#     }
-#   }
-#   statement {
-#     sid = "IAMself"
-#     actions = ["iam:*"]
-#     resources = ["arn:aws:iam::${data.aws_caller_identity.fourth.account_id}:user/${aws_iam_user.first.name}"]
-#   }
-# }
-#
-# resource "aws_iam_user_policy" "fourth" {
-#   user        = aws_iam_user.first.name
-#   name        = "USeastContainers"
-#   policy      = data.aws_iam_policy_document.fourth.json
-# }
-#
+data "aws_iam_policy_document" "second" {
+  # statement {
+  #   sid = "USeastContainers"
+  #   actions = ["eks:*", "ecs:*", "ecr:*"]
+  #   resources = ["*"]
+  #   condition {
+  #     test = "StringEquals"
+  #     variable = "aws:RequestedRegion"
+  #     values = ["us-east-1", "us-east-2"]
+  #   }
+  # }
+  statement {
+    sid = "IAMsecurityConsole"
+    actions = ["iam:*LoginProfile", "iam:ChangePassword", "iam:*MFADevice" ]
+    # resources = ["arn:aws:iam::<account_id>:user/<user_name>"]
+    # resources = [aws_iam_user.first.arn]
+    # resources = ["arn:aws:iam::*:user/&{aws:username}"]
+    resources = ["arn:aws:iam::${data.aws_caller_identity.first.account_id}:user/&{aws:username}", "arn:aws:iam::${data.aws_caller_identity.first.account_id}:mfa/&{aws:username}"]
+  }
+  statement {
+    sid = "IAMselfUpdate"
+    actions = ["iam:UpdateUser", "iam:TagUser", "iam:UntagUser", "iam:RemoveUserFromGroup"]
+    # resources = ["arn:aws:iam::<account_id>:user/<user_name>"]
+    resources = [aws_iam_user.first.arn]
+    # resources = ["arn:aws:iam::*:user/&{aws:username}"]
+    # resources = ["arn:aws:iam::${data.aws_caller_identity.first.account_id}:user/&{aws:username}"]
+  }
+  statement {
+    sid = "IAMsecurityAPI"
+    actions = ["iam:*AccessKey", "iam:*SSHPublicKey", "iam:*ServiceSpecificCredentials", "iam:*SigningCertificate"]
+    # resources = ["arn:aws:iam::<account_id>:user/<user_name>"]
+    resources = [aws_iam_user.first.arn]
+    # resources = ["arn:aws:iam::*:user/&{aws:username}"]
+    # resources = ["arn:aws:iam::${data.aws_caller_identity.first.account_id}:user/&{aws:username}"]
+  }
+  statement {
+    sid = "IAMreadAll"
+    actions = ["iam:Get*", "iam:List*", "iam:GenerateServiceLastAccessedDetails", "iam:GenerateCredentialReport", "iam:Simulate*Policy"]
+    resources = ["*"]
+    # resources = ["arn:aws:iam::<account_id>:user/<user_name>"]
+    # resources = [aws_iam_user.first.arn,]
+    # resources = ["arn:aws:iam::&{aws:PrincipalAccount}:user/&{aws:username}"]
+  }
+}
+
+resource "aws_iam_user_policy" "second" {
+  user        = aws_iam_user.first.name
+  name        = "IAMuserMax"
+  policy      = data.aws_iam_policy_document.second.json
+}
+

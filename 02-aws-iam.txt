@@ -239,23 +239,52 @@ decrypt with "keybase pgp decrypt" instead of "gpg -d"
 
 iam_user we created can be authenticated to our aws account but is not authorized to do anything.
 When using the password from login_profile successfully, you would have seen a password reset page that didnt work.
-Without being authorized with a policy with iam:ChangePassword action at the least, you cannot change your own password.
-    #
-Signin to the aws account with your root credentials. Go to the IAM dashboard -> Access Management -> Policies
-There are about 1400+ policies created and managed by AWS that are available for us to attach to any user or group.
+This is because iam_user has not been granted authorization to change their own password.
+There are about 1400+ authorization policies created and managed by AWS that are available for us to attach to any user or group.
+    #aws iam list-policies | jq -r '.Policies[].PolicyName' | less -iN
+Without being authorized with a policy that contains iam:ChangePassword action at the least, you cannot change your own password.
+    #aws iam list-policies | jq -r '.Policies[].PolicyName' | grep -i iam
+    #aws iam list-policies | jq -r '.Policies[] | select(.PolicyName|contains("IAM")) | [.PolicyName, .Arn] | @csv' | column -t -s ','
+    #aws iam list-policies | jq -r '.Policies[] | select(.PolicyName|test("iam";"i")) | [.PolicyName, .Arn] | @tsv' | column -t -s $'\t'
+    #aws iam list-policies | jq -r '.Policies[] | select(.PolicyName=="IAMUserChangePassword")'
 IAMUserChangePassword is an exisiting policy that allows a user to change their password. Get its arn for us to paste in our Iac
+    #aws iam list-policies --query 'Policies[?PolicyName==`IAMUserChangePassword`]'
+    #aws iam list-policies --query 'Policies[?PolicyName==`IAMUserChangePassword`].Arn' --output text
+    #aws iam get-policy --policy-arn $(!-1)
+    #!-2 | xargs -I ?? aws iam get-policy --policy-arn ??
+    #!-3 | xargs bash -c 'aws iam get-policy --policy-arn $1' bash
+    #!-4 | xargs aws iam get-policy --policy-arn
+    #!-5 | { read arn; aws iam get-policy --policy-arn $arn; }
+    #aws iam list-policies --query 'Policies[?PolicyName==`IAMUserChangePassword`].DefaultVersionId' --output text
+    #aws iam get-policy-version --version-id $(!-1) --policy-arn $(!-7)
+    #aws iam list-policies --query 'Policies[?PolicyName==`IAMUserChangePassword`].[Arn, DefaultVersionId]' --output text
+    #!-1 | xargs -d '\t' -n 2 bash -c 'aws iam get-policy-version --version-id $2 --policy-arn $1' bash
+    #!-2 | xargs bash -c 'aws iam get-policy-version --version-id $2 --policy-arn $1' $0
+    #!-3 | while read -r arn ver; do aws iam get-policy-version --version-id $ver --policy-arn $arn ; done
+To allows the iam_user to change his password, we need to attach IAMUserChangePassword policy to tf-user
+    #terraform output -raw user_name
+    #aws iam list-attached-user-policies --user-name $(!-1)
+    #aws iam list-policies --query 'Policies[?PolicyName==`IAMUserChangePassword`].Arn' --output text
+    #aws iam attach-user-policy --user $(!-3) --policy-arn $(!-1)
+    #aws iam list-attached-user-policies --user-name $(!-4)
+    #aws iam detach-user-policy --user $(!-5) --policy-arn $(!-3)
+    #aws iam list-attached-user-policies --user-name $(!-6)
+You could have tried to reset your password in console_url via browser before we did detach-user-policy. Or wait until we attach this policy using terraform.
 Create aws_iam_user_policy_attachment resource. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user_policy_attachment
 Set user as aws_iam_user.first.id and policy_arn to that of IAMUserChangePassword
     #vim iam.tf
     #terraform apply
+    #aws iam list-attached-user-policies --user-name $(terraform output -raw user_name)
 Now you can try to login to aws, change your password and see the aws dashboard.
     #terraform output console_url
     #terraform output user_name
     #terraform output -raw console_password_encrypted | base64 -d | gpg -d
-Lets grant more authorizations to iam_user by attaching more policies.
-To get the arn of the policies to attach, you could click on the policy you want to add and fetch it from the details page.
-or create it by adding the long arn prefix to the policy name, or fetch it from a data source.
-Create a list variable to accept the aws managed policy_names. Set the default value as an empty list/set.
+Lets grant more authorizations to iam_user by attaching additional policy_arn.
+To get the arn of the policies to attach, you could search for the policies you like and copy the arn from the below commands.
+    #aws iam list-policies --query 'Policies[?PolicyName==`IAMUserChangePassword`].[PolicyName, Arn]' --output table
+    #aws iam list-policies | jq -r '.Policies[] | select(.PolicyName | test("fullaccess"; "i") and test("iam|ec2|s3"; "i")) | [.PolicyName, .Arn] | @csv' | column -t -s ','
+or create arn by adding the long prefix to the policy name, or fetch it from a data source.
+Create a list variable to accept these managed aws_policy_names. Set the default value as an empty list/set.
 Add a validation to reject AdministratorAccess policy. This is a highly risky policy to be used.
 Add a validation to ensure at least IAMUserChangePassword is listed
     #vim variables.tf
@@ -275,13 +304,20 @@ Update aws_iam_user_policy_attachment.first with count as length(var.aws_policy_
 and cycle policy_arn through data.aws_iam_policy.first[] and use the arn from each of their elements.
     #vim iam.tf
     #terraform apply
+    #aws iam list-attached-user-policies --user-name $(terraform output -raw user_name)
 Lets attach more policies to the iam_user.
     #sed -i "s/\(aws_policy_names *= *\[\).*\(\]\)/\1$(echo '"AmazonEC2FullAccess", "AmazonS3FullAccess", "IAMFullAccess"')\2/" terraform.tfvars
     #terraform apply
+    #aws iam list-attached-user-policies --user-name $(terraform output -raw user_name)
+Revert back to the minimum authorization
+    #sed -i "s/\(aws_policy_names *= *\[\).*\(\]\)/\1$(echo '"IAMUserChangePassword"')\2/" terraform.tfvars
+    #terraform apply
+    #aws iam list-attached-user-policies --user-name $(terraform output -raw user_name)
 
 
 policies
 To generate aws user policies, Use https://awspolicygen.s3.amazonaws.com/policygen.html
+To validate attached policies https://policysim.aws.amazon.com/home/index.jsp
 
 The iam_admin user that we had create via aws console is only authorized to create IAM users and S3 buckets.
 Terraform will use the iam_admin authorization to create IAM user with greater permissions.
