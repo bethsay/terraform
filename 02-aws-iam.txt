@@ -65,6 +65,17 @@ Or if you use the same code/project to manage resources in a different aws accou
     #terraform init -reconfigure
 This will wipe the state file and disconnect the current terraform project from all resources/modules of the previous project.
 
+While using s3 or non-local backends are important in production and environments where you are not the only user,
+local backend will give faster processing of every terraform command that would reads/writes to state.
+Terraform override files allow you to customise any block of your root Iac. https://developer.hashicorp.com/terraform/language/files/override
+Any arguments within the blocks of the override file will replace the same argument on the original code. Other arguments of original remain as is.
+You cannot create new blocks in override file. Lets override the s3 backend with a local backend.
+    #vim backend_override.tf
+    #terraform init -migrate-state
+override files are usually gitignored in any terraform project unless you intentionally excluded it.
+If you want to test the useage of s3 backend, add a .temp extention to the override file and re-run terraform init.
+After testing, you revert to the tf extention and re-run terraform init -force-copy.
+
 Lets create the first resource of our iam project
 Using the aws_iam_user resource, create a user. name is a required argument. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user
     #vim iam.tf
