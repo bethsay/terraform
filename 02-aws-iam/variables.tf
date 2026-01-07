@@ -34,7 +34,7 @@ variable "aws_policy_names" {
   validation {
     condition = (
       !var.console_access ||                                    #IAMUserChangePassword policy isnt needed when console_access is disabled
-      length(var.aws_policy_names) == 0 ||                      #IAMUserChangePassword policy isnt needed when using custom_policy_name
+      length(var.aws_policy_names) == 0 ||                      #IAMUserChangePassword policy isnt needed when using custom_policy
       contains(var.aws_policy_names, "IAMFullAccess") ||        #IAMUserChangePassword policy is already include in IAMFullAccess
       contains(var.aws_policy_names, "IAMUserChangePassword")
     )
@@ -46,3 +46,17 @@ variable "aws_policy_names" {
   }
 }
 
+variable "custom_policy" {
+  type = list(object({
+    sid = optional(string),
+    effect = optional(string, "Allow"),
+    actions = list(string),
+    resources = optional(list(string), ["*"]),
+    condition = optional(list(object({
+      test = string,
+      variable = string,
+      values = list(string),
+    })), []),
+  }))
+  default = []
+}

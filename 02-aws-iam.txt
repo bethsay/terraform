@@ -227,7 +227,7 @@ filebase64 function on an empty string or file that doesnt exist will cause erro
     #vim iam.tf
     #terraform apply -var 'encryption_key=~/Downloads/recipient_name_public.gpg'
 If you dont have the public key of a recipient, you can test it with your public gpg key
-    #echo 'encryption_key="~/Public/my_name-public.gpg"' >> terraform.tfvars
+    #echo 'encryption_key="~/Public/my_name-public.gpg"' > terraform.tfvars
         ->all .tfvars files are gitignored
     #terraform apply
     #terraform output
@@ -299,7 +299,7 @@ Create a list variable to accept these managed aws_policy_names. Set the default
 Add a validation to reject AdministratorAccess policy. This is a highly risky policy to be used.
 Add a validation to ensure at least IAMUserChangePassword is listed
     #vim variables.tf
-    #echo 'aws_policy_names = [ "IAMUserChangePassword"]' >> terraform.tfvars
+    #echo 'aws_policy_names = ["IAMUserChangePassword"]' >> terraform.tfvars
     #terraform console
         #var.aws_policy_names
         #!contains(var.aws_policy_names, "AdministratorAccess")
@@ -324,12 +324,20 @@ Revert back to the minimum authorization
     #sed -i "s/\(aws_policy_names *= *\[\).*\(\]\)/\1$(echo '"IAMUserChangePassword"')\2/" terraform.tfvars
     #terraform apply
     #aws iam list-attached-user-policies --user-name $(terraform output -raw user_name)
+    #sed -i '/aws_policy_names/d' terraform.tfvars
+    #echo '# aws_policy_names = ["IAMUserChangePassword"]' > policies.tfvars
+    #echo '# aws_policy_names = ["AmazonEC2FullAccess", "AmazonS3FullAccess", "IAMFullAccess"]' >> policies.tfvars
 
 
 policies
 To generate aws user policies, Use https://awspolicygen.s3.amazonaws.com/policygen.html
 To validate attached policies https://policysim.aws.amazon.com/home/index.jsp
-
+You can test the value aws specific vairables in condition blocks.
+You may also use them as the expected condition values, in resource arns and principal arns
+Examples of aws variables in use. https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_variables.html
+List of aws global variables available. https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html
+List of s3  permissions, arn, and condition variables. https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazons3.html
+List of iam permissions, arn, and condition variables. https://docs.aws.amazon.com/service-authorization/latest/reference/list_awsidentityandaccessmanagementiam.html
 The iam_admin user that we had create via aws console is only authorized to create IAM users and S3 buckets.
 Terraform will use the iam_admin authorization to create IAM user with greater permissions.
 The access of these codeified users will allow us to create and manage any resource in our aws account.

@@ -104,6 +104,20 @@ resource "aws_s3_bucket_versioning" "all" {
   }
 }
 
+# resource "aws_s3_bucket_lifecycle_configuration" "all" {
+#   count = local.bucket_versioning_count
+#   bucket = local.mys3_id_all[count.index]
+#   rule {
+#     id = "ObjectVersionsLimit"
+#     filter {}
+#     noncurrent_version_expiration {
+#       noncurrent_days = 1
+#       newer_noncurrent_versions = 5
+#     }
+#     status = "Enabled"
+#   }
+# }
+#
 locals {
   bucket_upload_set   = setproduct(local.mys3_id_all, var.bucket_upload)
   bucket_upload_max   = (local.mys3_count_all) * (length(var.bucket_upload))

@@ -40,3 +40,5 @@ terraform.rc
 # Bethsay's changes
 training/
 !00-basics/terraform.rc
+!02-aws-iam/backend_override.tf
+!02-aws-iam/policies.tfvars

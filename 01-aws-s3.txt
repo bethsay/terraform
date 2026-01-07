@@ -377,8 +377,8 @@ Create a local to hold a list of any/all bucket names to be cycled in the bucket
 As we need to combine 2 strings with 2 lists, we will use setunion function with compact. https://developer.hashicorp.com/terraform/language/functions/setunion
 This combined list will be a good addition to our output as well.
     #terraform console
-        #setunion([one(aws_s3_bucket.first[0].id)], [one(aws_s3_bucket.second[0].id)], aws_s3_bucket.third[*].id, aws_s3_bucket.fourth[*].id)
-        #compact(setunion([one(aws_s3_bucket.first[0].id)], [one(aws_s3_bucket.second[0].id)], aws_s3_bucket.third[*].id, aws_s3_bucket.fourth[*].id))
+        #setunion([one(aws_s3_bucket.first[*].id)], [one(aws_s3_bucket.second[*].id)], aws_s3_bucket.third[*].id, aws_s3_bucket.fourth[*].id)
+        #compact(setunion([one(aws_s3_bucket.first[*].id)], [one(aws_s3_bucket.second[*].id)], aws_s3_bucket.third[*].id, aws_s3_bucket.fourth[*].id))
     #vim s3.tf
     #vim outputs.tf
 Create another local to be 5 when suffix_type is all and var.bucket_versioning is true, or be 1 if only var.bucket_versioning is true else be 0
