@@ -23,7 +23,18 @@ data "aws_caller_identity" "account_id" {}
 
 # data "aws_iam_account_alias" "account_alias" {}  #tfPlan Error expected when alias does not exist
 data "external" "account_alias" {
-  program = ["/bin/bash", "-c", "aws iam list-account-aliases | jq '{alias : .AccountAliases[0]}'"]
+  program = ["/bin/bash", "-c", "aws iam list-account-aliases | jq '{id : .AccountAliases[0]}'"]
+}
+
+locals {
+  signin_url = format("https://%s.signin.aws.amazon.com/console", coalesce(
+    data.external.account_alias.result.id,
+    data.aws_caller_identity.account_id.id
+  ))
+  # signin_url = formatlist("https://%s.signin.aws.amazon.com/console", compact([
+  #   data.external.account_alias.result.id,
+  #   data.aws_caller_identity.account_id.id
+  # ]))
 }
 
 resource "aws_iam_user_policy_attachment" "aws_policy" {
@@ -40,8 +51,10 @@ data "aws_iam_policy" "aws_policy" {
 
 resource "aws_iam_user_policy" "inline_policy" {
   user        = aws_iam_user.first.name
-  name        = "IAMselfAndS3backendViaTerraform"
-  policy      = data.aws_iam_policy_document.inline_policy.json
+  name        = "IAMreadAll"
+  policy      = data.aws_iam_policy_document.read_all.json
+  # name        = "IAMselfAndS3backendViaTerraform"
+  # policy      = data.aws_iam_policy_document.inline_policy.json
 }
 
 data "aws_iam_policy_document" "read_all" {

@@ -20,11 +20,6 @@ output "console_password" {
   sensitive = true
 }
 
-locals {
-  signin_url = format("https://%s.signin.aws.amazon.com/console", coalesce(data.external.account_alias.result.alias, data.aws_caller_identity.account_id.id))
-  # signin_url = formatlist("https://%s.signin.aws.amazon.com/console", compact([data.external.account_alias.result.alias, data.aws_caller_identity.account_id.id]))
-}
-
 output "console_url" {
   value = local.signin_url
 }

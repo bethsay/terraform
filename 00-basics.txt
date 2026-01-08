@@ -117,7 +117,7 @@ This behaviour can be managed by creating a terraformrc in users home directory
 The plugin_cache_dir will be used as the destination for all future plugin downloads that would be performed by terraform init
     #vim terraform.rc
     #cp terraform.rc ~/.terraformrc
-Lets test this by deleting our exisiting providers and doing a terraform init re-run
+Lets test this by deleting our existing providers and doing a terraform init re-run
     #du -csh .terraform/providers
     #rm -r .terraform/providers
     #terraform init
@@ -417,7 +417,7 @@ Lets set sensitive as false for output.path
     #vim outputs.tf
     #terraform apply -var-file values.txt
 
-The problem with using fileset function is that it operates only exisiting files and cannot reflect to changes made by the running terraform plan/apply
+The problem with using fileset function is that it operates only existing files and cannot reflect to changes made by the running terraform plan/apply
 Use the default values of all out variables with a terraform apply
     #terraform apply
     #terraform output

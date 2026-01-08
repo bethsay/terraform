@@ -81,7 +81,7 @@ Using the aws_iam_user resource, create a user. name is a required argument. htt
     #vim iam.tf
 path argument is optional and does not affect how the user access is utilized.
 Default path value is "/". path string must always start and end with "/".
-Even if the path is different from an exisiting user, the name cannot be reused.
+Even if the path is different from an existing user, the name cannot be reused.
 path argument is an attribute that allows to manage policies using a tree structure of iam_users and iam_groups.
 Create the resources and check if the user have been created via console or cli
     #terraform apply
@@ -174,8 +174,8 @@ If account_alias doesn not exist, you can create it
     #aws iam list-account-aliases
 Lets see if the data sources are working,
     #terraform apply
-    #terraform state show data.aws_caller_identity.first
-    #terraform state show data.aws_iam_account_alias.first
+    #terraform state show data.aws_caller_identity.account_id
+    #terraform state show data.aws_iam_account_alias.account_alias
 But if account_alias doesn not exist, this working IaC will break.
     #aws iam list-account-aliases
     #aws iam delete-account-alias --account-alias $(!-1 | jq -r '.AccountAliases[0]')
@@ -187,7 +187,7 @@ Lets add external provider to our required_providers block.
     #vim providers.tf
 Disable/Comment the aws_iam_account_alias data source.
 Create an external data source to run the list-account-aliases command in bash
-    #aws iam list-account-aliases | jq '{alias : .AccountAliases[0]}'
+    #aws iam list-account-aliases | jq '{id : .AccountAliases[0]}'
     #vim iam.tf
     #terraform apply
     #terraform state show data.external.account_alias
@@ -195,10 +195,10 @@ Lets create a local that generates the signin url, by prependending signing.aws.
 coalesce function returns the first value that is not  null or empty string. https://developer.hashicorp.com/terraform/language/functions/coalesce
 compact  function returns a list that does not contain null or empty string. https://developer.hashicorp.com/terraform/language/functions/compact
     #terraform console
-        #coalesce(data.external.account_alias.result.alias, data.aws_caller_identity.first.id)
-        #format("https://%s.signin.aws.amazon.com/console", coalesce(data.external.account_alias.result.alias, data.aws_caller_identity.first.id))
-        #compact([data.external.account_alias.result.alias, data.aws_caller_identity.first.id])
-        #formatlist("https://%s.signin.aws.amazon.com/console", compact([data.external.account_alias.result.alias, data.aws_caller_identity.first.id]))
+        #coalesce(data.external.account_alias.result.id, data.aws_caller_identity.account_id.id)
+        #format("https://%s.signin.aws.amazon.com/console", coalesce(data.external.account_alias.result.id, data.aws_caller_identity.account_id.id))
+        #compact([data.external.account_alias.result.id, data.aws_caller_identity.account_id.id])
+        #formatlist("https://%s.signin.aws.amazon.com/console", compact([data.external.account_alias.result.id, data.aws_caller_identity.account_id.id]))
     #vim iam.tf
 Lets create output blocks to share these signin urls
     #vim output.tf
@@ -258,7 +258,7 @@ Without being authorized with a policy that contains iam:ChangePassword action a
     #aws iam list-policies | jq -r '.Policies[] | select(.PolicyName|contains("IAM")) | [.PolicyName, .Arn] | @csv' | column -t -s ','
     #aws iam list-policies | jq -r '.Policies[] | select(.PolicyName|test("iam";"i")) | [.PolicyName, .Arn] | @tsv' | column -t -s $'\t'
     #aws iam list-policies | jq -r '.Policies[] | select(.PolicyName=="IAMUserChangePassword")'
-IAMUserChangePassword is an exisiting policy that allows a user to change their password. Get its arn for us to paste in our Iac
+IAMUserChangePassword is an existing policy that allows a user to change their password. Get its arn for us to paste in our Iac
     #aws iam list-policies --query 'Policies[?PolicyName==`IAMUserChangePassword`]'
     #aws iam list-policies --query 'Policies[?PolicyName==`IAMUserChangePassword`].Arn' --output text
     #aws iam get-policy --policy-arn $(!-1)
@@ -280,7 +280,7 @@ To allows the iam_user to change his password, we need to attach IAMUserChangePa
     #aws iam list-attached-user-policies --user-name $(!-4)
     #aws iam detach-user-policy --user $(!-5) --policy-arn $(!-3)
     #aws iam list-attached-user-policies --user-name $(!-6)
-You could have tried to reset your password in console_url via browser before we did detach-user-policy. Or wait until we attach this policy using terraform.
+You could have successfully reset your password in console_url via browser before we did detach-user-policy. Lets wait until we attach this policy using terraform.
 Create aws_iam_user_policy_attachment resource. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user_policy_attachment
 Set user as aws_iam_user.first.id and policy_arn to that of IAMUserChangePassword
     #vim iam.tf
@@ -291,16 +291,18 @@ Now you can try to login to aws, change your password and see the aws dashboard.
     #terraform output user_name
     #terraform output -raw console_password_encrypted | base64 -d | gpg -d
 Lets grant more authorizations to iam_user by attaching additional policy_arn.
-To get the arn of the policies to attach, you could search for the policies you like and copy the arn from the below commands.
+With the below command, you could get the arn of an existing policy. But you need to know the exact policy name
     #aws iam list-policies --query 'Policies[?PolicyName==`IAMUserChangePassword`].[PolicyName, Arn]' --output table
+With the below command, you could search for the names and arn of policies that exist.
     #aws iam list-policies | jq -r '.Policies[] | select(.PolicyName | test("fullaccess"; "i") and test("iam|ec2|s3"; "i")) | [.PolicyName, .Arn] | @csv' | column -t -s ','
-or create arn by adding the long prefix to the policy name, or fetch it from a data source.
+I feel passing policy names as input variables is much prettier than passing policy arns.
+Policy names can be converted to arn by either adding the long prefix to the policy name, or fetch it from a data source.
 Create a list variable to accept these managed aws_policy_names. Set the default value as an empty list/set.
 Add a validation to reject AdministratorAccess policy. This is a highly risky policy to be used.
 Add a validation to ensure at least IAMUserChangePassword is listed
     #vim variables.tf
-    #echo 'aws_policy_names = ["IAMUserChangePassword"]' >> terraform.tfvars
-    #terraform console
+    #echo 'aws_policy_names = ["IAMUserChangePassword"]' >> policies.tfvars
+    #terraform console -var-file policies.tfvars
         #var.aws_policy_names
         #!contains(var.aws_policy_names, "AdministratorAccess")
         #contains(var.aws_policy_names, "IAMUserChangePassword") || contains(var.aws_policy_names, "IAMFullAccess")
@@ -308,23 +310,47 @@ Making the arn by adding the prefix to var.aws_policy_names is much faster, but 
 Create aws_iam_policy data source to fetch the arns. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy
 Set the count as length(var.aws_policy_names) and set the name to cycle through the elements of var.aws_policy_names.
     #vim iam.tf
-    #terraform apply
-    #terraform show -json | jq -r '.values.root_module.resources[] | select(.address=="data.aws_iam_policy.first[0]") | .values'
-    #terraform state show data.aws_policy_names.first[0]
-Update aws_iam_user_policy_attachment.first with count as length(var.aws_policy_names),
-and cycle policy_arn through data.aws_iam_policy.first[] and use the arn from each of their elements.
+    #terraform apply -var-file policies.tfvars
+    #terraform show -json | jq -r '.values.root_module.resources[] | select(.address=="data.aws_iam_policy.aws_policy[0]") | .values'
+    #terraform state show data.aws_policy_names.aws_policy[0]
+Update aws_iam_user_policy_attachment.aws_policy with count as length(var.aws_policy_names),
+and cycle policy_arn through each data.aws_iam_policy.aws_policy and use the respective arns.
     #vim iam.tf
-    #terraform apply
+    #terraform apply -var-file policies.tfvars
     #aws iam list-attached-user-policies --user-name $(terraform output -raw user_name)
 Lets attach more policies to the iam_user.
-    #sed -i "s/\(aws_policy_names *= *\[\).*\(\]\)/\1$(echo '"AmazonEC2FullAccess", "AmazonS3FullAccess", "IAMFullAccess"')\2/" terraform.tfvars
-    #terraform apply
+    #sed -i "s/\(aws_policy_names *= *\[\).*\(\]\)/\1$(echo '"AmazonEC2FullAccess", "AmazonS3FullAccess", "IAMFullAccess"')\2/" policies.tfvars
+    #terraform apply -var-file policies.tfvars
     #aws iam list-attached-user-policies --user-name $(terraform output -raw user_name)
 Revert back to the minimum authorization
     #sed -i "s/\(aws_policy_names *= *\[\).*\(\]\)/\1$(echo '"IAMUserChangePassword"')\2/" terraform.tfvars
-    #terraform apply
+    #terraform apply -var-file policies.tfvars
     #aws iam list-attached-user-policies --user-name $(terraform output -raw user_name)
-    #sed -i '/aws_policy_names/d' terraform.tfvars
+
+With the IAMUserChangePassword policy attached, iam_user was able to change their password once and is then redirected to the aws console homepage.
+Navigate to IAM->AccessManagement->Users page. This is where you would have been able to see your user_name listed, but all see is Access Denied.
+IAMUserChangePassword policy allows changing password once when password reset is expected. Too restrictive.
+IAMFullAccess policy will allows complete management of every user, group and iam_resources within the aws account. Excessive authorization.
+A policy that a proper fit for iam_user is the one you create. To generate policies, Use https://awspolicygen.s3.amazonaws.com/policygen.html.
+When creating a custom policy for a user, ie, an inline_policy, you should be specific, grant minimum authorizations, and not block user expected actions.
+Full list of iam actions and its type, resource, and condition variables. https://docs.aws.amazon.com/service-authorization/latest/reference/list_awsidentityandaccessmanagementiam.html
+Lets create a policy that allows iam_user user to get, read, list, view every IAM resource and allows smooth navigation within aws IAM page.
+Create aws_iam_policy_document data source to generate policy in aws format. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy
+Within aws_iam_policy_document nest a statement block with all iam actions that start with get and list and any other read type actions.
+Also set a sid that identifies the statement and set resources to all within the nested statement block.
+    #vim iam.tf
+    #terraform apply -var-file policies.tfvars
+    #terraform state show data.aws_iam_policy_document.read_all
+Create aws_iam_user_policy resource. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user_policy
+Set a name for the policy, user as aws_iam_user.first.id, and policy as the json attribute of data.aws_iam_policy_document.read_all
+    #vim iam.tf
+    #terraform apply -var-file policies.tfvars
+Now IAM->AccessManagement->Users page is accesible to iam_user. You can also check out the Groups, Roles, and Policies pages.
+
+
+
+
+    #sed -i '/aws_policy_names/d' policies.tfvars
     #echo '# aws_policy_names = ["IAMUserChangePassword"]' > policies.tfvars
     #echo '# aws_policy_names = ["AmazonEC2FullAccess", "AmazonS3FullAccess", "IAMFullAccess"]' >> policies.tfvars
 
