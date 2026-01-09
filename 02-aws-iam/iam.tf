@@ -51,10 +51,10 @@ data "aws_iam_policy" "aws_policy" {
 
 resource "aws_iam_user_policy" "inline_policy" {
   user        = aws_iam_user.first.name
-  name        = "IAMreadAll"
-  policy      = data.aws_iam_policy_document.read_all.json
-  # name        = "IAMselfAndS3backendViaTerraform"
-  # policy      = data.aws_iam_policy_document.inline_policy.json
+  # name        = "IAMreadAll"
+  # policy      = data.aws_iam_policy_document.read_all.json
+  name        = "IAMselfAndS3backendViaTerraform"
+  policy      = data.aws_iam_policy_document.inline_policy.json
 }
 
 data "aws_iam_policy_document" "read_all" {
@@ -70,11 +70,7 @@ data "aws_iam_policy_document" "api_security" {
   statement {
     sid = "IAMselfAPIsecurity"
     actions = ["iam:*AccessKey", "iam:*SSHPublicKey", "iam:*ServiceSpecificCredentials", "iam:*SigningCertificate"]
-    # resources = ["arn:aws:iam::<account_id>:user/<user_name>"]
-    # resources = ["arn:aws:iam::${data.aws_caller_identity.first.account_id}:user/${aws_iam_user.first.name}"]
     resources = [aws_iam_user.first.arn]
-    # resources = ["arn:aws:iam::*:user/&{aws:username}"]
-    # resources = ["arn:aws:iam::${data.aws_caller_identity.first.account_id}:user/&{aws:username}"]
   }
 }
 
@@ -83,10 +79,7 @@ data "aws_iam_policy_document" "console_security" {
   statement {
     sid = "IAMselfConsoleSecurity"
     actions = ["iam:*LoginProfile", "iam:ChangePassword", "iam:*MFADevice" ]
-    # resources = ["arn:aws:iam::<account_id>:user/<user_name>"]
-    # resources = [aws_iam_user.first.arn, "arn:aws:iam::*:mfa/*"]
-    # resources = ["arn:aws:iam::*:user/&{aws:username}", "arn:aws:iam::*:mfa/&{aws:username}*"]
-    resources = ["arn:aws:iam::${data.aws_caller_identity.account_id.id}:user/&{aws:username}", "arn:aws:iam::${data.aws_caller_identity.account_id.id}:mfa/&{aws:username}*"]
+    resources = [aws_iam_user.first.arn, "arn:aws:iam::${data.aws_caller_identity.account_id.id}:mfa/${aws_iam_user.first.name}*"]
   }
 }
 

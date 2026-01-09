@@ -331,22 +331,82 @@ With the IAMUserChangePassword policy attached, iam_user was able to change thei
 Navigate to IAM->AccessManagement->Users page. This is where you would have been able to see your user_name listed, but all see is Access Denied.
 IAMUserChangePassword policy allows changing password once when password reset is expected. Too restrictive.
 IAMFullAccess policy will allows complete management of every user, group and iam_resources within the aws account. Excessive authorization.
-A policy that a proper fit for iam_user is the one you create. To generate policies, Use https://awspolicygen.s3.amazonaws.com/policygen.html.
-When creating a custom policy for a user, ie, an inline_policy, you should be specific, grant minimum authorizations, and not block user expected actions.
+A policy that a proper fit for iam_user is the one you create. To generate custom policies, Use https://awspolicygen.s3.amazonaws.com/policygen.html.
+Lets understand the structure of a policy document.
+    #aws iam list-policies --query 'Policies[?PolicyName==`IAMUserChangePassword`].Arn' --output text
+    #aws iam get-policy --policy-arn $(!-1)
+    #aws iam list-policies --query 'Policies[?PolicyName==`IAMUserChangePassword`].[Arn, DefaultVersionId]' --output text
+    #!-1 | xargs bash -c 'aws iam get-policy-version --version-id $2 --policy-arn $1' $0
+    #!-2 | while read -r arn ver; do aws iam get-policy-version --version-id $ver --policy-arn $arn ; done
+    #aws iam list-policies --query 'Policies[?PolicyName==`IAMFullAccess`].[Arn, DefaultVersionId]' --output text
+    #!-1 | xargs bash -c 'aws iam get-policy-version --version-id $2 --policy-arn $1' $0
+    #!-2 | while read -r arn ver; do aws iam get-policy-version --version-id $ver --policy-arn $arn ; done
+The main part of the document is the list of statement blocks, ie, "Statement":[{"Effect":"","Action":[],"Resources":[]}].
+In Effect, we specify "Allow" or "Deny".
+In Action, we list the "aws_service:action" that policy permits or denies.
+In Resources, we list the arn on which the policy actions are scoped/limited to.
+Format of arn is "arn:aws:<aws_service>:<aws_region>:<account_id>:<aws_resource_type>/<path>/<aws_resource_name>"
+For iam arn, aws_region is left blank. For s3 arn, aws_region and account_id are left blank.
+Wildcards, ie, "*", can be used in Action list and in Resources list.
+When creating an inline_policy, aim for max specificity in resources and min list of actions, to authorize know user activities only.
 Full list of iam actions and its type, resource, and condition variables. https://docs.aws.amazon.com/service-authorization/latest/reference/list_awsidentityandaccessmanagementiam.html
-Lets create a policy that allows iam_user user to get, read, list, view every IAM resource and allows smooth navigation within aws IAM page.
-Create aws_iam_policy_document data source to generate policy in aws format. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy
+Lets create a policy that allows iam_user user to get, read, list, view every IAM resource enabling smooth navigation within aws IAM page.
+Create aws_iam_policy_document data source to generate policy statement. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy
 Within aws_iam_policy_document nest a statement block with all iam actions that start with get and list and any other read type actions.
+Default statement effect is "Allow", we can skip setting it. For "Deny" statements, we must use the effect argument.
 Also set a sid that identifies the statement and set resources to all within the nested statement block.
     #vim iam.tf
     #terraform apply -var-file policies.tfvars
     #terraform state show data.aws_iam_policy_document.read_all
+Improve the IAMreadAll policy document by grouping the statements based on resource scope of each action.
+Actions without resource scope must use resource "*" and placed in a single statement.
+Actions with user scope must list the arn of users iam_user is allowed to read and be in another group.
+Then create seperate statements for group, and policy resources if iam_user is allowed to read them.
+Lets apply data.aws_iam_policy_document.read_all to the aws_iam_user.first
 Create aws_iam_user_policy resource. https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_user_policy
 Set a name for the policy, user as aws_iam_user.first.id, and policy as the json attribute of data.aws_iam_policy_document.read_all
     #vim iam.tf
     #terraform apply -var-file policies.tfvars
 Now IAM->AccessManagement->Users page is accesible to iam_user. You can also check out the Groups, Roles, and Policies pages.
+Lets add statements that allow iam_user to do more.
+If we create Accesskey and secret for iam_user lets also authorize them to manage these keys and other key based auth systems.
+Create aws_iam_policy_document data source with count as 1 if var.api_access is true, else be 0.
+Set the statement allow all actions associated with AccessKey, SSHPublicKey, and other code based auth.
+Set the resources as arn of aws_iam_user.first. Also set sid to identify this statement.
+    #vim iam.tf
+    #terraform apply -var-file policies.tfvars
+    #terraform state show data.aws_iam_policy_document.api_security
+MFA device is an iam resource. Once created, it can be used after enabling. Enabling includes attaching it to a user
+    #aws iam list-virtual-mfa-devices
+Creating and Enabling (virtual) mfa devices can be done via awscli and via terraform but is not worth the effort. Use aws console for this.
+Virtual MFA devices can be deleted only after deactivating it. Deactivating requires user_name and serial_number/arn of mfa device as arguments.
+    #aws iam deactivate-mfa-devices --user-name <iam_user> --serial-number <arn>
+    #aws iam delete-virtual-mfa-devices --serial-number <arn>
+MFA device is a unique resource within iam. Once its created, it can attached to a user. It can be deleted only after detaching it.
+If we create console access for iam_user lets also authorize them to manage their login_profile, password and mfa
+Create aws_iam_policy_document data source with count as 1 if var.console_access is true, else be 0.
+Set the statement allow all actions associated with LoginProfile, MFADevice, and also ChangePassword
+Set the resources as arn of aws_iam_user.first and arn of mfa with "arn:aws:iam::<account_id>:mfa/<mfa_name>"
+In the mfa arn, replace account_id with id of data.caller_identity.account_id and replace mfa_name with a prifix of aws_iam_user.first.name
+Also set sid to identify this statement.
+    #vim iam.tf
+    #terraform apply -var-file policies.tfvars
+    #terraform state show data.aws_iam_policy_document.console_security
+Now we have 3 aws_iam_policy_document data sources and we have only attached one of them to iam_user.
+We could have created one data source block nesting all 3 statements trading-off our var.api_access and var.console_access switches.
+aws_iam_policy_document data source supports the source_policy_documents argument.
+source_policy_documents accepts a list of json attributes from other aws_iam_policy_document data sources.
+source_policy_documents pulls all statements from each list element.
+Statements with same sid will cause conflict errors. The statements without sid are permitted.
+The statements that will be combined by source_policy_documents argument cannot O
+The json elements of source_policy_documents must not 
 
+Login to aws console as iam_user and create mfa device for itself.
+    #aws iam list-virtual-mfa-devices
+You would have been redirected through 2 webpages to have the MFA device listed in your profile.
+First page created mfa device with its own arn and the 2nd page Enabled it to your user.
+We could have set the mfa arn as "arn:aws:iam::*:mfa/*". When policy is attached to iam_user any string can be user to label their mfa device.
+This is fine 
 
 
 
