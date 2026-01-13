@@ -11,12 +11,12 @@ output "api_access" {
 }
 
 output "api_secret" {
-  value = one(aws_iam_access_key.first[*].secret)
+  value     = one(aws_iam_access_key.first[*].secret)
   sensitive = true
 }
 
 output "console_password" {
-  value = one(aws_iam_user_login_profile.first[*].password)
+  value     = one(aws_iam_user_login_profile.first[*].password)
   sensitive = true
 }
 
@@ -25,12 +25,12 @@ output "console_url" {
 }
 
 output "console_password_encrypted" {
-  value = one(aws_iam_user_login_profile.first[*].encrypted_password)
+  value     = one(aws_iam_user_login_profile.first[*].encrypted_password)
   sensitive = true
 }
 
 output "api_secret_encrypted" {
-  value = one(aws_iam_access_key.first[*].encrypted_secret)
+  value     = one(aws_iam_access_key.first[*].encrypted_secret)
   sensitive = true
 }
 

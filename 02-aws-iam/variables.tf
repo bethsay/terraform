@@ -9,22 +9,22 @@ variable "user_path" {
 }
 
 variable "user_force_destroy" {
-  type = bool
+  type    = bool
   default = true
 }
 
 variable "api_access" {
-  type = bool
+  type    = bool
   default = true
 }
 
 variable "console_access" {
-  type = bool
+  type    = bool
   default = true
 }
 
 variable "encryption_key" {
-  type = string
+  type    = string
   default = ""
 }
 
@@ -33,30 +33,43 @@ variable "aws_policy_names" {
   default = []
   validation {
     condition = (
-      !var.console_access ||                                    #IAMUserChangePassword policy isnt needed when console_access is disabled
-      length(var.aws_policy_names) == 0 ||                      #IAMUserChangePassword policy isnt needed when using custom_policy
-      contains(var.aws_policy_names, "IAMFullAccess") ||        #IAMUserChangePassword policy is already include in IAMFullAccess
+      !var.console_access ||                             #IAMUserChangePassword policy isnt needed when console_access is disabled
+      length(var.aws_policy_names) == 0 ||               #IAMUserChangePassword policy isnt needed when using custom_policy
+      contains(var.aws_policy_names, "IAMFullAccess") || #IAMUserChangePassword policy is already include in IAMFullAccess
       contains(var.aws_policy_names, "IAMUserChangePassword")
     )
     error_message = "include IAMUserChangePassword policy. Or you could deny console access or avoid using aws managed policies."
   }
   validation {
-    condition = !contains(var.aws_policy_names, "AdministratorAccess")
-    error_message = "AWS admins should not be created by code"
+    condition     = !contains(var.aws_policy_names, "AdministratorAccess")
+    error_message = "AWS Administrators must not be created by code"
   }
 }
 
 variable "custom_policy" {
   type = list(object({
-    sid = optional(string),
-    effect = optional(string, "Allow"),
-    actions = list(string),
+    sid       = optional(string),
+    effect    = optional(string, "Allow"),
+    actions   = list(string),
     resources = optional(list(string), ["*"]),
     condition = optional(list(object({
-      test = string,
+      test     = string,
       variable = string,
-      values = list(string),
+      values   = list(string),
     })), []),
   }))
   default = []
+  validation {
+    condition = (
+      !contains(flatten(var.custom_policy[*].actions), "*") &&
+      !contains(flatten(var.custom_policy[*].actions), "*:*")
+    )
+    error_message = "AWS Administrators should not be created by code"
+  }
 }
+
+variable "custom_policy_name" {
+  type    = string
+  default = "tf-IAMselfManage"
+}
+

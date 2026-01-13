@@ -1,19 +1,19 @@
 resource "aws_iam_user" "first" {
-  # name = "tf-user"
-  # # path = "/dev/"
-  name = var.user
-  path = var.user_path
+  # name          = "tf-user"
+  # # path          = "/dev/"
+  name          = var.user
+  path          = var.user_path
   force_destroy = var.user_force_destroy
 }
 
 resource "aws_iam_access_key" "first" {
-  count = var.api_access ? 1 : 0
-  user = aws_iam_user.first.name
-  pgp_key                 = try(filebase64(var.encryption_key), "")
+  count   = var.api_access ? 1 : 0
+  user    = aws_iam_user.first.name
+  pgp_key = try(filebase64(var.encryption_key), "")
 }
 
 resource "aws_iam_user_login_profile" "first" {
-  count = var.console_access ? 1 : 0
+  count                   = var.console_access ? 1 : 0
   user                    = aws_iam_user.first.name
   password_reset_required = true
   pgp_key                 = try(filebase64(var.encryption_key), "")
@@ -40,27 +40,28 @@ locals {
 resource "aws_iam_user_policy_attachment" "aws_policy" {
   user       = aws_iam_user.first.id
   # policy_arn = "arn:aws:iam::aws:policy/IAMUserChangePassword"
-  count = length(var.aws_policy_names)
+  count      = length(var.aws_policy_names)
   policy_arn = data.aws_iam_policy.aws_policy[count.index].arn
 }
 
 data "aws_iam_policy" "aws_policy" {
   count = length(var.aws_policy_names)
-  name     = var.aws_policy_names[count.index]
+  name  = var.aws_policy_names[count.index]
 }
 
 resource "aws_iam_user_policy" "inline_policy" {
-  user        = aws_iam_user.first.name
-  # name        = "IAMreadAll"
-  # policy      = data.aws_iam_policy_document.read_all.json
-  name        = "IAMselfAndS3backendViaTerraform"
-  policy      = data.aws_iam_policy_document.inline_policy.json
+  user   = aws_iam_user.first.name
+  # # name   = "tf-IAMreadAll"
+  # # policy = data.aws_iam_policy_document.read_all.json
+  # name   = "tf-IAMselfManage"
+  name   = var.custom_policy_name
+  policy = data.aws_iam_policy_document.inline_policy.json
 }
 
 data "aws_iam_policy_document" "read_all" {
   statement {
-    sid = "IAMreadAll"
-    actions = ["iam:Get*", "iam:List*", "iam:GenerateServiceLastAccessedDetails", "iam:GenerateCredentialReport", "iam:Simulate*Policy"]
+    sid       = "IAMreadAll"
+    actions   = ["iam:Get*", "iam:List*", "iam:GenerateServiceLastAccessedDetails", "iam:GenerateCredentialReport", "iam:Simulate*Policy"]
     resources = ["*"]
   }
 }
@@ -68,8 +69,8 @@ data "aws_iam_policy_document" "read_all" {
 data "aws_iam_policy_document" "api_security" {
   count = var.api_access ? 1 : 0
   statement {
-    sid = "IAMselfAPIsecurity"
-    actions = ["iam:*AccessKey", "iam:*SSHPublicKey", "iam:*ServiceSpecificCredentials", "iam:*SigningCertificate"]
+    sid       = "IAMselfAPIsecurity"
+    actions   = ["iam:*AccessKey", "iam:*SSHPublicKey", "iam:*ServiceSpecificCredentials", "iam:*SigningCertificate"]
     resources = [aws_iam_user.first.arn]
   }
 }
@@ -77,8 +78,8 @@ data "aws_iam_policy_document" "api_security" {
 data "aws_iam_policy_document" "console_security" {
   count = var.console_access ? 1 : 0
   statement {
-    sid = "IAMselfConsoleSecurity"
-    actions = ["iam:*LoginProfile", "iam:ChangePassword", "iam:*MFADevice" ]
+    sid       = "IAMselfConsoleSecurity"
+    actions   = ["iam:*LoginProfile", "iam:ChangePassword", "iam:*MFADevice"]
     resources = [aws_iam_user.first.arn, "arn:aws:iam::${data.aws_caller_identity.account_id.id}:mfa/${aws_iam_user.first.name}*"]
   }
 }
@@ -89,87 +90,22 @@ data "aws_iam_policy_document" "inline_policy" {
     data.aws_iam_policy_document.api_security[*].json,
     data.aws_iam_policy_document.console_security[*].json,
   )
-  # statement {
-  #   sid = "USeastContainers"
-  #   actions = ["eks:*", "ecs:*", "ecr:*"]
-  #   resources = ["*"]
-  #   condition {
-  #     test = "StringEquals"
-  #     variable = "aws:RequestedRegion"
-  #     values = ["us-east-1", "us-east-2"]
-  #   }
-  # }
   dynamic "statement" {
     for_each = var.custom_policy
     content {
-      sid = statement.value.sid
-      effect = statement.value.effect
-      actions = statement.value.actions
+      sid       = statement.value.sid
+      effect    = statement.value.effect
+      actions   = statement.value.actions
       resources = statement.value.resources
       dynamic "condition" {
         for_each = statement.value.condition
         content {
-          test = condition.value.test
+          test     = condition.value.test
           variable = condition.value.variable
-          values = condition.value.values
+          values   = condition.value.values
         }
       }
     }
   }
-  # statement {
-  #   sid = "S3listBucketNames"
-  #   actions = [ "s3:ListAllMyBuckets" ]
-  #   resources = ["*"]
-  #   condition {
-  #     test = "StringLike"
-  #     variable = "aws:ResourceAccount"
-  #     values = [data.aws_caller_identity.first.account_id]
-  #   }
-  # }
-  # statement {
-  #   sid = "S3backendDedicatedBucket"
-  #   actions = [
-  #     "s3:CreateBucket", "s3:DeleteBucket*", "s3:ListBucket*", "s3:GetBucket*", "s3:PutBucket*", "s3:UpdateBucket*",
-  #     "s3:GetObject*", "s3:PutObject*", "s3:DeleteObject*", "s3:RestoreObject",
-  #     "s3:GetLifecycleConfiguration", "s3:PutLifecycleConfiguration"
-  #   ]
-  #   # resources = ["arn:aws:<aws_service>:<aws_region>:<account_id>:<aws_resource_type>/<path>/<aws_resource_name>"]
-  #   resources = ["arn:aws:s3:::terraform-backend-58fd44e0", "arn:aws:s3:::terraform-backend-58fd44e0/*"]
-  #   condition {
-  #     test = "StringLike"
-  #     variable = "aws:RequestedRegion"
-  #     values = ["us-east-1"]
-  #   }
-  #   condition {
-  #     test = "StringLike"
-  #     variable = "aws:ResourceAccount"
-  #     values = [data.aws_caller_identity.first.account_id]
-  #   }
-  # }
-  # statement {
-  #   sid = "S3backendSharedBucket"
-  #   actions = ["s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject" ]
-  #   # resources = ["arn:aws:<aws_service>:<aws_region>:<account_id>:<aws_resource_type>/<path>/<aws_resource_name>"]
-  #   resources = [
-  #     "arn:aws:s3:::terraform-backend-58fd44e0",
-  #     "arn:aws:s3:::terraform-backend-58fd44e0/iam/terraform.tfstate",
-  #     "arn:aws:s3:::terraform-backend-58fd44e0/iam/terraform.tfstate.tflock"
-  #   ]
-  #   condition {
-  #     test = "StringLike"
-  #     variable = "aws:RequestedRegion"
-  #     values = ["us-east-1"]
-  #   }
-  #   condition {
-  #     test = "StringLike"
-  #     variable = "aws:ResourceAccount"
-  #     values = [data.aws_caller_identity.first.account_id]
-  #   }
-  # }
-  # statement {
-  #   sid = "IAMselfModify"
-  #   actions = ["iam:UpdateUser", "iam:TagUser", "iam:UntagUser"]
-  #   resources = [aws_iam_user.first.arn]
-  # }
 }
 

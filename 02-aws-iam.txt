@@ -19,7 +19,7 @@ Create an aws_s3_bucket resource using the variables and local as bucket, force_
 Terraform recomends that the backend bucket must have versioning enabled. https://developer.hashicorp.com/terraform/language/backend/s3
 Create aws_s3_bucket_versioning resource with versioning Enabled for aws_s3_bucket resource. 
     #vim backend.tf
-Lets output the bucket name/id to be used later.
+Lets output the bucket name/id and bucket arn to be used later.
     #vim outputs.tf
 Lets get these resources created.
     #terraform apply
@@ -39,7 +39,7 @@ To run terraform commands in other project directories, use the -chdir flag
 Lets re-apply our pre-init sub project.
     #terraform -chdir=./pre-init apply
     #terraform -chdir=./pre-init output s3_id
-Create backed s3 block with the bucket name from pre-init, any "path/state_file_name" as key, aws region of bucket, and lockfile toggle
+Create backend s3 block with the bucket name from pre-init, any "path/state_file_name" as key, aws region of bucket, and lockfile toggle
     #vim providers.tf
 If you are not using the default s3_prefix value to create a bucket
     #terraform -chdir=./pre-init apply -var 's3_prefix=custom-name'
@@ -301,7 +301,7 @@ Create a list variable to accept these managed aws_policy_names. Set the default
 Add a validation to reject AdministratorAccess policy. This is a highly risky policy to be used.
 Add a validation to ensure at least IAMUserChangePassword is listed
     #vim variables.tf
-    #echo 'aws_policy_names = ["IAMUserChangePassword"]' >> policies.tfvars
+    #echo 'aws_policy_names = ["IAMUserChangePassword"]' > policies.tfvars
     #terraform console -var-file policies.tfvars
         #var.aws_policy_names
         #!contains(var.aws_policy_names, "AdministratorAccess")
@@ -323,14 +323,16 @@ Lets attach more policies to the iam_user.
     #terraform apply -var-file policies.tfvars
     #aws iam list-attached-user-policies --user-name $(terraform output -raw user_name)
 Revert back to the minimum authorization
-    #sed -i "s/\(aws_policy_names *= *\[\).*\(\]\)/\1$(echo '"IAMUserChangePassword"')\2/" terraform.tfvars
+    #sed -i "s/\(aws_policy_names *= *\[\).*\(\]\)/\1$(echo '"IAMUserChangePassword"')\2/" policies.tfvars
     #terraform apply -var-file policies.tfvars
     #aws iam list-attached-user-policies --user-name $(terraform output -raw user_name)
+Lets add the list of excessive policies for future reference.
+    #echo '# aws_policy_names = ["AmazonEC2FullAccess", "AmazonS3FullAccess", "IAMFullAccess"]' >> policies.tfvars
 
 With the IAMUserChangePassword policy attached, iam_user was able to change their password once and is then redirected to the aws console homepage.
 Navigate to IAM->AccessManagement->Users page. This is where you would have been able to see your user_name listed, but all see is Access Denied.
-IAMUserChangePassword policy allows changing password once when password reset is expected. Too restrictive.
-IAMFullAccess policy will allows complete management of every user, group and iam_resources within the aws account. Excessive authorization.
+IAMUserChangePassword policy allows changing password only once, ie, when password reset is true. Too restrictive.
+IAMFullAccess policy will allows altering the security scope of the entire aws account. Excessive authorization.
 A policy that a proper fit for iam_user is the one you create. To generate custom policies, Use https://awspolicygen.s3.amazonaws.com/policygen.html.
 Lets understand the structure of a policy document.
     #aws iam list-policies --query 'Policies[?PolicyName==`IAMUserChangePassword`].Arn' --output text
@@ -367,8 +369,12 @@ Create aws_iam_user_policy resource. https://registry.terraform.io/providers/has
 Set a name for the policy, user as aws_iam_user.first.id, and policy as the json attribute of data.aws_iam_policy_document.read_all
     #vim iam.tf
     #terraform apply -var-file policies.tfvars
+    #terraform output -raw user_name
+    #aws iam list-user-policies --user-name $(!-1)
+    #aws iam get-user-policy --user-name $(!-2) --policy-name $(!-1 --query 'PolicyNames[]' --output text)
 Now IAM->AccessManagement->Users page is accesible to iam_user. You can also check out the Groups, Roles, and Policies pages.
-Lets add statements that allow iam_user to do more.
+
+Lets add aws_iam_policy_document data sources that allow iam_user to do more.
 If we create Accesskey and secret for iam_user lets also authorize them to manage these keys and other key based auth systems.
 Create aws_iam_policy_document data source with count as 1 if var.api_access is true, else be 0.
 Set the statement allow all actions associated with AccessKey, SSHPublicKey, and other code based auth.
@@ -376,13 +382,9 @@ Set the resources as arn of aws_iam_user.first. Also set sid to identify this st
     #vim iam.tf
     #terraform apply -var-file policies.tfvars
     #terraform state show data.aws_iam_policy_document.api_security
-MFA device is an iam resource. Once created, it can be used after enabling. Enabling includes attaching it to a user
+MFA device is a unique iam resource. Once created, it can be used after enabling. Enabling includes attaching it to a user
     #aws iam list-virtual-mfa-devices
 Creating and Enabling (virtual) mfa devices can be done via awscli and via terraform but is not worth the effort. Use aws console for this.
-Virtual MFA devices can be deleted only after deactivating it. Deactivating requires user_name and serial_number/arn of mfa device as arguments.
-    #aws iam deactivate-mfa-devices --user-name <iam_user> --serial-number <arn>
-    #aws iam delete-virtual-mfa-devices --serial-number <arn>
-MFA device is a unique resource within iam. Once its created, it can attached to a user. It can be deleted only after detaching it.
 If we create console access for iam_user lets also authorize them to manage their login_profile, password and mfa
 Create aws_iam_policy_document data source with count as 1 if var.console_access is true, else be 0.
 Set the statement allow all actions associated with LoginProfile, MFADevice, and also ChangePassword
@@ -394,41 +396,105 @@ Also set sid to identify this statement.
     #terraform state show data.aws_iam_policy_document.console_security
 Now we have 3 aws_iam_policy_document data sources and we have only attached one of them to iam_user.
 We could have created one data source block nesting all 3 statements trading-off our var.api_access and var.console_access switches.
-aws_iam_policy_document data source supports the source_policy_documents argument.
-source_policy_documents accepts a list of json attributes from other aws_iam_policy_document data sources.
-source_policy_documents pulls all statements from each list element.
-Statements with same sid will cause conflict errors. The statements without sid are permitted.
-The statements that will be combined by source_policy_documents argument cannot O
-The json elements of source_policy_documents must not 
-
-Login to aws console as iam_user and create mfa device for itself.
+aws_iam_policy_document data source has 2 arguments used for document merging. source_policy_documents and override_policy_documents.
+Both accepts a list of json attributes from other aws_iam_policy_document data sources.
+source_policy_documents pulls statements from all its list elements.
+The statements of current/base aws_iam_policy_document data source are merged onto source_policy_documents statements.
+override_policy_documents performs an sequential pull+merge of its elemental statements onto the merged base statements.
+Statements without sid get pulled but does not participate in merging.
+Statements with sid, during each merge, will have its argument values overwriten by the arguments in statements with the exact sid.
+source_policy_documents cannot accept an element if its statement sid matches with the sid of another elements statement.
+Create another aws_iam_policy_document with source_policy_documents as the json attribute of read_all, api_security, and console_security documents.
+Use concat function to reliably handle api_security and console_security when they dont exist. concat expects read_all also as a list.
+    #vim iam.tf
+As we have considered iam:ChangePassword in console_security, we dont need the aws_policy IAMUserChangePassword to be attached to iam_user.
+    #terraform apply
+    #terraform state show data.aws_iam_policy_document.inline_policy
+Update the policy in aws_iam_user_policy resource to use the json of inline_policy instead of read_all. Update the name to reflect the change.
+    #vim iam.tf
+    #terraform apply
+    #terraform output -raw user_name
+    #aws iam list-user-policies --user-name $(!-1)
+    #aws iam get-user-policy --user-name $(!-2) --policy-name $(!-1 --query 'PolicyNames[]' --output text)
+As iam_user, Login to aws console and create mfa device for yourself.
     #aws iam list-virtual-mfa-devices
 You would have been redirected through 2 webpages to have the MFA device listed in your profile.
-First page created mfa device with its own arn and the 2nd page Enabled it to your user.
-We could have set the mfa arn as "arn:aws:iam::*:mfa/*". When policy is attached to iam_user any string can be user to label their mfa device.
-This is fine 
+First page creates mfa device and the 2nd page enables it to your user.
+If you had not prefixed the mfa with the name of iam_user, you would see an Access Denied when you try to go to 2nd page.
+You can even try to create mfa devices for other users as well. But will not enable it for anyone else.
+If you had tried this, an mfa device would have been created but not enabled.
+Stale mfa devices cannot be tracked or removed via console. Same outcome would be seen if creating mfa device for yourself was interrupted.
+Virtual MFA devices can be deleted only after deactivating it. Deactivating requires user_name and serial_number/arn of mfa device as arguments.
+    #aws iam list-virtual-mfa-devices
+    #aws iam deactivate-mfa-devices --user-name <iam_user> --serial-number <arn>
+    #aws iam delete-virtual-mfa-devices --serial-number <arn>
+If we had set the mfa arn without prefix, like "arn:aws:iam::*:mfa/*" in console_security,
+it would require extra steps to identify who created the stale mfa device during cleanup.
 
+We have created user inline_policy policy within the Iac, with authorization to manage their own authentication.
+Lets have inline_policy be created by variables, similar to how we attached aws_policy_names.
+We need the variable to accept a list(map) values. While we can have the map values can be set by the user, we must ensure map keys are fixed.
+While map and objects appear the same, using type as object allows us to define the keys that variable values must use.
+Use this example. https://developer.hashicorp.com/terraform/language/expressions/type-constraints#example-nested-structures-with-optional-attributes-and-defaults
+Create a variable custom_policy of type list(object) that must contain sid, effect, actions, resources and conditions.
+sid and effect will have string type values. actions and resources will have list(string) type values. condition will have list(object) type values.
+A value of condition is an object must contain test, variable and values. test and condition will have type string while values will be list(string)
+sid can be empty. Set default for effect to be "Allow", resources to be "*", condition to be [] (an empty set)
+Add a validation to reject statements that has the actions "*" or "*:*". This is a highly risky policy to be used.
+Set the default value of the variable to be an empty list.
+    #vim variables.tf
+    #terraform console
+        #var.custom_policy
+For nested blocks of data sources to use variables, we need to redefine them as dynamic blocks. https://developer.hashicorp.com/terraform/language/expressions/dynamic-blocks
+Update data.aws_iam_policy_document.inline_policy to have a nested dynamic block that cycles for_each var.custom_policy to create statement blocks.
+The content of dynamic statement block should have sid, effect, actions, and resources arguments whose values correspond to values from the var.custom_policy.
+Dynamic statement block should also have a dynamic condition block that cycles for_each of the list(objects) in var.custom_policy.condition[*]
+The content of dynamic condition block should have test, variable, and values arguments.
+    #vim iam.tf
+Alternatively you could create a data source to specifically handle var.custom_policy (if its list is not empty) and add it as a source in inline_policy.
+Lets also create a custom_policy_name string variable with a default value and apply it in aws_iam_user_policy resource.
+    #vim variables.tf
+    #vim iam.tf
+    #terraform apply
 
+As we no longer need IAMUserChangePassword, we dont need any values for aws_policy. Comment it out.
+    #vim policies.tfvars
+Lets allow iam_user to Tag and Untag themselves and also to Update their user_name and path.
+But using aws_iam_user.first.arn as a resource in var.custom_policy will cause errors because values of variables must be know prior to parsing of terraform code.
+aws has a set of global policy variables. https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html
+For aws to consider strings as policy variables they must be enclosed in ${xx}. https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_variables.html
+While policy variables are meant to be used for condition testing, we may use it in the last/resource section of arn. arn:partition:service:region:account:resource
+But ${xx} is also the format expected by terraform code to perform value substitution in any expression.
+Due to this conflict data source aws_iam_policy_document expects aws policy variables to be enclosed by &{xx}.
+Create a var.custom_policy element to allow the actions Update, Tag, and Untag on the resource user/&{aws:username}
+    #vim policies.tfvars
+    #terraform apply -var-file policies.tfvars
+If you want to add more iam authorizations. https://docs.aws.amazon.com/service-authorization/latest/reference/list_awsidentityandaccessmanagementiam.html
+aws console allows for adding and removing user tags, but updating path and name can be done only via cli.
+aws has policy simulator that allows testing authorizations of any iam_user without needing to sign in as that user. https://policysim.aws.amazon.com/home/index.jsp
+If you do change name, path, or tags, it will cause state drift
 
-    #sed -i '/aws_policy_names/d' policies.tfvars
-    #echo '# aws_policy_names = ["IAMUserChangePassword"]' > policies.tfvars
-    #echo '# aws_policy_names = ["AmazonEC2FullAccess", "AmazonS3FullAccess", "IAMFullAccess"]' >> policies.tfvars
+The pre-init sub project had created an S3 bucket to be used as terraform backend. Lets allow iam_user to do anything with that bucket.
+    #terraform -chdir=./pre-init output s3_arn
+Add another element to var.custom_policy. Allow all GetObject, PutObject, DeleteObject and RestoreObject actions on the any item within ${s3_arn}.
+Also, allow any CreateBucket, ListBucket, GetBucket, PutBucket, DeleteBucket and LifecycleConfiguration on the resource ${s3_arn}.
+Seeing the arn of a bucket, you can see that they are not scoped by account_id or region but they can be tied to both.
+We know which region our backend bucket has been created in. If iam_user deletes the bucket we can limit them to recreate it in a specific region.
+Add a condition to ensure aws:RequestedRegion is us-east-1. and aws:ResourceAccount (or s3:ResourceAccount) is same ${aws:PrincipalAccount}. principal=requester
+    #vim policies.tfvars
+    #terraform apply -var-file policies.tfvars
+If the backend bucket was not create by pre-init and if it is a shared bucket in which iam_user must be limited object operations.
+Add an element that has ListBucket action for path navigation and GetObject, PutObject and DeleteObject for state read+write operations.
+The element must be limited to the resource arn_external_bucket, arn_external_bucket_and_backend_key and arn_external_bucket_and_backend_key.tflock
+If you want to add more S3 authorizations. https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazons3.html
 
-
-policies
-To generate aws user policies, Use https://awspolicygen.s3.amazonaws.com/policygen.html
-To validate attached policies https://policysim.aws.amazon.com/home/index.jsp
-You can test the value aws specific vairables in condition blocks.
-You may also use them as the expected condition values, in resource arns and principal arns
-Examples of aws variables in use. https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_variables.html
-List of aws global variables available. https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html
-List of s3  permissions, arn, and condition variables. https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazons3.html
-List of iam permissions, arn, and condition variables. https://docs.aws.amazon.com/service-authorization/latest/reference/list_awsidentityandaccessmanagementiam.html
-The iam_admin user that we had create via aws console is only authorized to create IAM users and S3 buckets.
-Terraform will use the iam_admin authorization to create IAM user with greater permissions.
-The access of these codeified users will allow us to create and manage any resource in our aws account.
-Lets create a project which we can use to manage new IAM users and their permission
-
+We had run this iam project and the previous s3 project using the authorization of iam_admin.
+For future project we will create iam_user and backend that is specifically scoped to the project operations.
+Lets clean up
+    #terraform destroy -auto-approve && terraform -chdir=./pre-init destroy -auto-approve
+Thats all about 02-aws-iam project . Before we commit, lets format our code
+    #terraform fmt -check
+    #terraform fmt -diff
 
 ||=============================================================================================
 ||------------Extras: Basic CRUDS of GPG keys------------
