@@ -42,8 +42,27 @@ variable "bucket_versioning" {
   default = true
 }
 
+variable "version_limit" {
+  type    = number
+  default = 5
+}
+
 variable "bucket_upload" {
   type    = list(string)
   default = []
+}
+
+variable "bucket_lock" {
+  type    = bool
+  default = true
+}
+
+variable "lock_bypass" {
+  type    = list(string)
+  default = []
+  validation {
+    condition = var.bucket_lock || length(lock_bypass) == 0
+    error_message = "lock_bypass cannot items when bucket_lock is disabled"
+  }
 }
 

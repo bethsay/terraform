@@ -492,7 +492,7 @@ We had run this iam project and the previous s3 project using the authorization 
 For future project we will create iam_user and backend that is specifically scoped to the project operations.
 Lets clean up
     #terraform destroy -auto-approve && terraform -chdir=./pre-init destroy -auto-approve
-Thats all about 02-aws-iam project . Before we commit, lets format our code
+Thats all about 02-aws-iam project. Before we commit, lets format our code
     #terraform fmt -check
     #terraform fmt -diff
 

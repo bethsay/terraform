@@ -1,7 +1,6 @@
 locals {
-  app      = "file-gen"
-  app_caps = upper(local.app)
-  path     = "${path.root}/training/${local.app_caps}"
+  app  = upper(var.name)
+  path = "${path.root}/training/${local.app}"
 }
 
 resource "local_file" "env_files_set" {

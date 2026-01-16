@@ -104,20 +104,20 @@ resource "aws_s3_bucket_versioning" "all" {
   }
 }
 
-# resource "aws_s3_bucket_lifecycle_configuration" "all" {
-#   count = local.bucket_versioning_count
-#   bucket = local.mys3_id_all[count.index]
-#   rule {
-#     id = "ObjectVersionsLimit"
-#     filter {}
-#     noncurrent_version_expiration {
-#       noncurrent_days = 1
-#       newer_noncurrent_versions = 5
-#     }
-#     status = "Enabled"
-#   }
-# }
-#
+resource "aws_s3_bucket_lifecycle_configuration" "all" {
+  count = local.bucket_versioning_count
+  bucket = local.mys3_id_all[count.index]
+  rule {
+    id = "VersionCleanup"
+    filter {}
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+      newer_noncurrent_versions = var.version_limit
+    }
+    status = "Enabled"
+  }
+}
+
 locals {
   bucket_upload_set   = setproduct(local.mys3_id_all, var.bucket_upload)
   bucket_upload_max   = (local.mys3_count_all) * (length(var.bucket_upload))
@@ -130,4 +130,37 @@ resource "aws_s3_object" "all" {
   key    = "preload/${basename(local.bucket_upload_set[count.index][1])}"
   source = local.bucket_upload_set[count.index][1]
 }
+
+locals {
+  mys3_arn_all = compact(tolist(setunion(
+    [one(aws_s3_bucket.first[*].arn)],
+    [one(aws_s3_bucket.second[*].arn)],
+    aws_s3_bucket.third[*].arn,
+    aws_s3_bucket.fourth[*].arn
+  )))
+  bucket_lock_count = (var.bucket_lock && var.suffix_type == "all") ? local.mys3_count_all : (var.bucket_lock ? 1 : 0)
+  lock_bypass = flatten([ "arn:aws:iam::${data.aws_caller_identity.bucket_owner.account_id}:root" , data.aws_caller_identity.bucket_owner.arn , var.lock_bypass[*] ])
+}
+
+resource "aws_s3_bucket_policy" "all" {
+  count = local.bucket_lock_count
+  bucket = local.mys3_id_all[count.index]
+  policy = data.aws_iam_policy_document.deny_others[count.index]
+}
+
+data "aws_iam_policy_document" "deny_others" {
+  count = local.bucket_lock_count
+  statement {
+    sid = "LockedBucketWithExceptions"
+    principals {
+      type = "*"
+      identifiers = ["*"]
+    }
+    actions = [ "s3:Delete*", "s3:Put*", "s3:GetObject", "s3:GetObjectVersion" ]
+    resources = [ local.mys3_arn_all[count.index], "${local.mys3_arn_all[count.index]}/*" ]
+  }
+
+}
+
+data "aws_caller_identity" "bucket_owner" {}
 

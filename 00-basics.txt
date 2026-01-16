@@ -425,8 +425,8 @@ Even though all the files have changed, output.count and output.items are reflec
     #terraform apply
     #terraform output
 Now the output matches the actual files.
-This is because every functions and expressions get evaluated/processed before any of the blocks are processed, unless there is an implicit dependency.
-If an parameter/argument of any function/expression is a terraform resource, its evaluation is delayed until the resource has been processed by terraform plan.
+This is because functions and expressions are evaluated before any of the blocks are processed, unless there is an implicit dependency.
+If arguments of functions and expressions expects a terraform resource attribute, its evaluation is delayed until the resource has been processed by terraform plan.
 If output.items is using the slice or element+chunklist operation, terraform plan/apply will fail with an error if it is followed by a destroy.
     #terraform destroy
     #terraform apply -var-file values.txt
@@ -474,6 +474,7 @@ Thats all about the advanced topics. Before we commit and move to basics of terr
     #terraform fmt -diff
 
 -------------------------PENDING: Try the provisioner blocks within resources-------------------------
+
 Modules are a fully working terraform project that can be reused in other project like an add-on package.
 Any project that we create is called the root module. Lets create one
     #mkdir 00-basics-modules
@@ -485,8 +486,9 @@ Let use code from 00-basics-plus to create a child module.
         ->Use hashicorp/local as a required_providers
     #vim ./00-basics-modules/child_module/main.tf
         ->Use the locals block along with the env_files_set and component_files resource blocks from ./00-basics-plus/main.tf
+        ->In the locals block, use path.root instead of path.module and get app string from a variable
     #vim ./00-basics-modules/child_module/variables.tf
-        ->Use the env and component variables from ./00-basics-plus/variables.tf
+        ->Use the env and component variables from ./00-basics-plus/variables.tf and add name string to be applied as local.app
     #vim ./00-basics-modules/child_module/outputs.tf
         ->Use path, items and count output from ./00-basics-plus/outputs.tf
         ->No need to make it human-readable, so skip the format function
@@ -496,9 +498,11 @@ Since the only resources that will be created are using the child_module, we can
     #vim 00-basics-modules/main.tf
         ->Create module block with the source as ./child_module
         ->Copy the values for env and component from ./00-basics-plus/values.txt into the module block
-        ->Create a output block whose value would be a set of count, path and items output of the module
+        ->Create a output block to return all attributes of the module.
 Lets Initialize and apply our root module
     #terraform init
+    #terraform console
+        #module.file-gen
     #terraform apply
     #terraform output
 Thats all about modules topic. Before we commit, lets format our code

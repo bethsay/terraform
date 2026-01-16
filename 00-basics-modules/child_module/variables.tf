@@ -1,8 +1,15 @@
+variable "name" {
+  description = "Module name used as parent directory"
+  type        = string
+  default     = "child_module"
+}
+
 variable "env" {
   description = "List of environments"
   type        = set(string)
   default     = ["tf_infra_1", "tf_infra_2"]
 }
+
 variable "component" {
   description = "List of components"
   type        = map(string)

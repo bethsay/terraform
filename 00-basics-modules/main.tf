@@ -1,5 +1,6 @@
 module "file-gen" {
   source = "./child_module"
+  name   = "file-gen"
   env    = ["dev", "stage", "qa", "edge", "demo", "prod", "dr"]
   component = {
     "client"   = "Welcome client. You will recieve data from frontend and you can repond to it"
@@ -9,9 +10,5 @@ module "file-gen" {
 }
 
 output "file-gen" {
-  value = {
-    count = module.file-gen.count
-    path  = module.file-gen.path
-    items = module.file-gen.items
-  }
+  value = module.file-gen
 }
