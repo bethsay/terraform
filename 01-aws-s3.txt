@@ -445,6 +445,20 @@ Set key argument to prefix a path to the basenames of the 1st element of every s
     #aws s3api list-buckets | jq -r '.Buckets[].Name' | xargs -L 1 aws s3api list-objects-v2 --bucket | jq -r '.Contents[] | [.LastModified, .Size, .Key ] | @tsv'
     #terraform destroy
 
+    #terraform console
+        #regex("[\\d]{4}-[\\d]{2}-[\\d]{2}T[\\d]{2}:[\\d]{2}:[\\d]{2}Z", timestamp())
+        #regex("^[\\d]{4}-[\\d]{2}-[\\d]{2}T[\\d]{2}:[\\d]{2}:[\\d]{2}Z$", timestamp())
+        #regex("^([\\d]{4}-[\\d]{2}-[\\d]{2})T([\\d]{2}:[\\d]{2}:[\\d]{2})Z$", timestamp())
+        #regex("^(?P<date>[\\d]{4}-[\\d]{2}-[\\d]{2})T(?P<time>[\\d]{2}:[\\d]{2}:[\\d]{2})Z$", timestamp())
+    #terraform console
+        #regex("arn:aws:iam::\\d{12}:user/[\\w,.+-=@/]+", "Error: arn:aws:iam::123456789012:user/authorized_iam_user should fail")
+        #regex("^arn:aws:iam::[\\d]{12}:user/[\\w,.+-=@/]+$", "arn:aws:iam::123456789012:user/authorized_iam_user")
+        #regex("^(arn:aws:iam::[\\d]{12}:user)/([\\w,.+-=@/]+)$", "arn:aws:iam::123456789012:user/authorized_iam_user")
+        #regex("^(?:arn:aws:iam::[\\d]{12}:user)/([\\w,.+-=@/]+)$", "arn:aws:iam::123456789012:user/authorized_iam_user")
+        #regex("^arn:aws:(iam)::([\\d]{12}):(user|role)/([\\w,.+-=@/]+)$", "arn:aws:iam::123456789012:user/authorized_iam_user")
+        #regex("^arn:aws:(?<service>iam)::(?<account>[\\d]{12}):(?<type>user|role)/(?<pathAndName>[\\w+=,.@-]+)$", "arn:aws:iam::123456789012:user/mybucket/authorized/iam_user")
+        #regex("^arn:aws:(?P<service>iam)::(?P<account>[\\d]{12}):(?P<type>user|role)(?P<path>/(?:[\\x21-\\x7E]*/)?)(?P<name>[\\w+=,.@-]+)$", "arn:aws:iam::123456789012:user/mybucket/authorized/iam_user")
+
 We will be using the learnings from this project to create child_module in other aws projects to prepare backends.
 Thats all about 01-aws-s3 project . Before we commit, lets format our code
     #terraform fmt -check

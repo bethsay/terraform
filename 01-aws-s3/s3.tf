@@ -139,13 +139,18 @@ locals {
     aws_s3_bucket.fourth[*].arn
   )))
   bucket_lock_count = (var.bucket_lock && var.suffix_type == "all") ? local.mys3_count_all : (var.bucket_lock ? 1 : 0)
-  lock_bypass = flatten([ "arn:aws:iam::${data.aws_caller_identity.bucket_owner.account_id}:root" , data.aws_caller_identity.bucket_owner.arn , var.lock_bypass[*] ])
+  lock_bypass_arn = flatten([
+    "arn:aws:iam::${data.aws_caller_identity.bucket_owner.account_id}:root",
+    data.aws_caller_identity.bucket_owner.arn,
+    data.aws_iam_user.lock_bypass_username[*].arn,
+    var.lock_bypass_arn,
+  ])
 }
 
 resource "aws_s3_bucket_policy" "all" {
   count = local.bucket_lock_count
   bucket = local.mys3_id_all[count.index]
-  policy = data.aws_iam_policy_document.deny_others[count.index]
+  policy = data.aws_iam_policy_document.deny_others[count.index].json
 }
 
 data "aws_iam_policy_document" "deny_others" {
@@ -158,9 +163,18 @@ data "aws_iam_policy_document" "deny_others" {
     }
     actions = [ "s3:Delete*", "s3:Put*", "s3:GetObject", "s3:GetObjectVersion" ]
     resources = [ local.mys3_arn_all[count.index], "${local.mys3_arn_all[count.index]}/*" ]
+     condition {
+       test = "StringNotEquals"
+       variable = "aws:PrincipalArn"
+       values = local.lock_bypass_arn
+     }
   }
-
 }
 
 data "aws_caller_identity" "bucket_owner" {}
+
+data "aws_iam_user" "lock_bypass_username" {
+  count = length(var.lock_bypass_username)
+  user_name = var.lock_bypass_username[count.index]
+}
 

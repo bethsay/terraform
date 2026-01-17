@@ -57,12 +57,30 @@ variable "bucket_lock" {
   default = true
 }
 
-variable "lock_bypass" {
+variable "lock_bypass_username" {
   type    = list(string)
   default = []
   validation {
-    condition = var.bucket_lock || length(lock_bypass) == 0
+    condition = var.bucket_lock || length(var.lock_bypass_username) == 0
     error_message = "lock_bypass cannot items when bucket_lock is disabled"
+  }
+}
+
+variable "lock_bypass_arn" {
+  type    = list(string)
+  default = []
+  validation {
+    condition = var.bucket_lock || length(var.lock_bypass_arn) == 0
+    error_message = "lock_bypass cannot items when bucket_lock is disabled"
+  }
+  validation {
+    condition = alltrue([
+      for item in var.lock_bypass_arn : can(regex(
+        "^arn:aws:iam::[\\d]{12}:(?:user|role)(/(?:[\\x21-\\x7E]*/)?)([\\w+=,.@-]+)$",
+        item
+      ))
+    ])
+    error_message = "Only User or Role Arn may be passed"
   }
 }
 
