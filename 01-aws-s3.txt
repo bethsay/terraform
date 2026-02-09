@@ -1,7 +1,7 @@
 Install aws cli
     #cd ~/Downloads/
     #curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
-    #unzip awscliv2.zip 
+    #unzip awscliv2.zip
     #sudo ./aws/install
     #aws version
     #aws help
@@ -446,6 +446,7 @@ Set key argument to prefix a path to the basenames of the 1st element of every s
     #terraform destroy
 
     #terraform console
+        #timestamp()
         #regex("[\\d]{4}-[\\d]{2}-[\\d]{2}T[\\d]{2}:[\\d]{2}:[\\d]{2}Z", timestamp())
         #regex("^[\\d]{4}-[\\d]{2}-[\\d]{2}T[\\d]{2}:[\\d]{2}:[\\d]{2}Z$", timestamp())
         #regex("^([\\d]{4}-[\\d]{2}-[\\d]{2})T([\\d]{2}:[\\d]{2}:[\\d]{2})Z$", timestamp())

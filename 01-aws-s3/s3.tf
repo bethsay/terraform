@@ -108,13 +108,53 @@ resource "aws_s3_bucket_lifecycle_configuration" "all" {
   count = local.bucket_versioning_count
   bucket = local.mys3_id_all[count.index]
   rule {
+    status = "Enabled"
     id = "VersionCleanup"
     filter {}
     noncurrent_version_expiration {
       noncurrent_days = 1
       newer_noncurrent_versions = var.version_limit
     }
+  }
+  rule {
     status = "Enabled"
+    id = "DeleteMarker"
+    filter { }
+    expiration { expired_object_delete_marker = true }
+  }
+  rule {
+    status = "Disabled"
+    id = "Docs"
+    filter { prefix = "/docs" }
+    noncurrent_version_transition {
+      noncurrent_days = 15
+      newer_noncurrent_versions = 3
+      storage_class = "STANDARD_IA"
+    }
+    noncurrent_version_transition {
+      noncurrent_days = 30
+      newer_noncurrent_versions = 6
+      storage_class = "GLACIER"
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 60
+      newer_noncurrent_versions = 12
+    }
+  }
+  rule {
+    status = "Disabled"
+    id = "Logs"
+    filter { prefix = "/logs" }
+    transition {
+      days = 7
+      storage_class = "STANDARD_IA"
+    }
+    transition {
+      days = 30
+      storage_class = "GLACIER"
+    }
+    expiration { days = 180 }
+    noncurrent_version_expiration { noncurrent_days = 1 }
   }
 }
 
@@ -139,12 +179,12 @@ locals {
     aws_s3_bucket.fourth[*].arn
   )))
   bucket_lock_count = (var.bucket_lock && var.suffix_type == "all") ? local.mys3_count_all : (var.bucket_lock ? 1 : 0)
-  lock_bypass_arn = flatten([
-    "arn:aws:iam::${data.aws_caller_identity.bucket_owner.account_id}:root",
-    data.aws_caller_identity.bucket_owner.arn,
+  lock_bypass_arn = concat(
+    ["arn:aws:iam::${data.aws_caller_identity.bucket_owner.account_id}:root"],
+    [data.aws_caller_identity.bucket_owner.arn],
     data.aws_iam_user.lock_bypass_username[*].arn,
     var.lock_bypass_arn,
-  ])
+  )
 }
 
 resource "aws_s3_bucket_policy" "all" {
