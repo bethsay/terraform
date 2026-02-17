@@ -1,0 +1,45 @@
+# Sourced from https://github.com/actions/starter-workflows/blob/main/deployments/terraform.yml
+# Sourced from https://github.com/warolv/github-actions-series/blob/master/.github/workflows/provision_ec2.yaml
+# Sourced from https://github.com/spacelift-io-blog-posts/Blog-Technical-Content/blob/master/terraform-github-actions/.github/workflows/terraform.yml
+name: 'Create S3 Bucket'
+
+on:
+  workflow_dispatch:
+  # push:
+    # branches:
+    # - gha/deploy
+
+jobs:
+  aws-deploy:
+    name: 'Create S3 Bucket in AWS with Terraform code'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: ./create-s3-bucket
+
+    steps:
+    - name: Clone the gha/deploy branch of current repo
+      uses: actions/checkout@v6
+      with:
+        ref: 'gha/deploy'
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v6
+      with:
+        aws-region: us-east-1
+        aws-access-key-id: ${{ secrets.ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.SECRET_KEY }}
+
+    - name: Install Terraform
+      uses: hashicorp/setup-terraform@v3
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Plan
+      run: terraform plan
+
+    - name: Terraform Apply
+      run: terraform apply -auto-approve
