@@ -4,10 +4,10 @@
 name: 'Create S3 Bucket'
 
 on:
-  # workflow_dispatch:
-  push:
-    branches:
-    - gha/deploy
+  workflow_dispatch:
+  # push:
+  #   branches:
+  #   - gha/deploy
 
 jobs:
   aws-deploy:
