@@ -1,3 +1,26 @@
+variable "path_aws_creds" {
+  type    = list(string)
+  default = null
+}
+
+variable "path_aws_conf" {
+  type    = list(string)
+  default = null
+}
+
+variable "profile_aws_conf" {
+  type    = string
+  default = null
+}
+
+variable "global_tags" {
+  type    = map(string)
+  default = {
+    project = "training"
+    env     = "dev"
+  }
+}
+
 variable "user" {
   type    = string
   default = "tf-user"

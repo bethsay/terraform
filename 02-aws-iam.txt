@@ -9,6 +9,15 @@ Knowing this lets create a sub project to handle this s3 pre-requisite.
     #mkdir ./02-aws-iam/pre-init/ && cd ./02-aws-iam/pre-init/
 Use the aws provider and set it up with shared config, creds, profile. https://registry.terraform.io/providers/hashicorp/aws/latest/docs#shared-configuration-and-credentials-files
     #vim providers.tf
+While variables and functions cannot be used in terraform block or any of its child blocks, it is allowed within aws provider block.
+Create variables path_aws_creds(list), path_aws_conf(list) and profile_aws_conf(string) with default values as null for all 3 of them.
+    #vim variables.tf
+We could have set default values for these variables as the ["~/.aws/credentials"], ["~/.aws/config"] and "default", but
+Setting them as null allows us to run the code in systems that apply aws creds as env variables. https://registry.terraform.io/providers/hashicorp/aws/latest/docs#environment-variables
+Lets also create the variable global_tags(map) and reuse the static tags as the default values of the variable.
+    #vim variables.tf
+Update aws provider block to use variables, instead of the static values.
+    #vim provider.tf
 We wont be using s3 backend config here, so, our terraform.tfstate will be local
 Initialize the project by installing the provider plugin/binary
     #terraform init
@@ -32,8 +41,9 @@ Everytime you stop working on this project or when you have completed this proje
 
 Lets switch back to our main project
     #cd 02-aws-iam/
-Use the aws provider and set it up with shared config, creds, profile.
+Use the aws provider and set it up with variablized shared_config, shared_creds, profile and global_tags.
     #vim providers.tf
+    #vim variables.tf
 Lets configure an s3 bucket as the backend. https://developer.hashicorp.com/terraform/language/backend/s3
 To run terraform commands in other project directories, use the -chdir flag
 Lets re-apply our pre-init sub project.
