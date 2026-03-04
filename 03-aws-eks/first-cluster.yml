@@ -1,0 +1,13 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: minimal-cluster
+  region: us-east-1
+
+nodeGroups:
+- name: minimal
+  instanceType: t3.small
+  desiredCapacity: 1
+  minSize: 1
+  maxSize: 2
+

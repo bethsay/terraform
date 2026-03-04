@@ -1,0 +1,15 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: mixed-cluster
+  region: us-east-1
+
+nodeGroups:
+- name: planned
+  instanceType: t3.small
+  desiredCapacity: 1
+
+fargateProfiles:
+- name: unplanned
+  selectors:
+  - namespace: experiment

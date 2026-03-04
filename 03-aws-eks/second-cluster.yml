@@ -1,0 +1,11 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: fargate-cluster
+  region: us-east-1
+
+fargateProfiles:
+- name: serverless
+  selectors:
+  - namespace: default
+  - namespace: kube-system
