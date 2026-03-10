@@ -1,0 +1,89 @@
+For our next project lets manage an eks cluster.
+    #mkdir 03-aws-eks/
+
+Before create the code for eks terraform project, lets create our first cluster. Lets use eksctl instead of the aws dashboard
+For eksctl to create the cluster, it needs an IAM user with FullAccess to EKS, EC2, CloudFormation, IAM and read permissions in Systems Manager.
+The iam_admin we had configured as aws default creds had been used by terraform apply in our iam and s3 projects.
+iam_admin doesnt have the permissions to create an eks cluster.
+Create IAM user tf-eks-admin with the right policies attached to create a cluster.
+    #cd 02-aws-iam
+
+Lets use our iam project to create tf-eks-admin
+Option 1: Quickest Method - Using eksctl (Recommended for Minimal Setup)
+Prerequisites:
+Install AWS CLI and configure it with your credentials
+    #aws --version
+    #aws configure list
+Install kubectl
+    #apt update
+    #apt install -y apt-transport-https ca-certificates curl gpg
+    #curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.35/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+    #echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.35/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+    #apt update
+    #apt-cache policy kubectl
+    #apt install -y kubectl
+    #kubectl version --client
+Install eksctl
+    #curl -LO "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz"
+    #curl -L "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_checksums.txt" | grep "Linux_amd64" | sha256sum --check
+    #tar -xvzf eksctl_Linux_amd64.tar.gz
+    #install -m 0755 eksctl /usr/local/bin/
+    #eksctl completion bash > /etc/bash_completion.d/eksctl
+    #source <(eksctl completion bash)
+    #eksctl info
+    #eksctl version
+    #aws configure import --csv file://~/Downloads/eks-admin_accessKeys.csv
+    #aws configure set profile.eks-admin.region us-east-1
+    #aws configure set profile.eks-admin.output json
+Create a minimal cluster with a single command:
+    #eksctl create cluster --name my-minimal-cluster --region us-east-1 --nodegroup-name standard-workers --node-type t3.medium --nodes 1 --nodes-min 1 --nodes-max 3
+    #eksctl create cluster --name my-first-cluster --region us-east-1 --profile tf-eks-admin
+Wont work with free-tier account as default type is m5.large
+This creates A minimal EKS cluster with 1 worker node Using t3.medium instances (cost-effective)
+Automatically configures networking (VPC, subnets, security groups) and sets up kubectl configuration
+Verify your cluster:
+    #kubectl get nodes
+    #kubectl get pods --all-namespaces
+Clean up when done:
+    #eksctl delete cluster --name my-minimal-cluster --region us-east-1
+
+Option 2: Even More Minimal - Using Fargate (Serverless)
+For the absolute minimal setup without managing nodes:
+    #eksctl create cluster --name minimal-fargate --region us-west-2 --fargate
+This creates a serverless Kubernetes cluster where AWS manages all the infrastructure.
+
+Option 3: Configuration File Approach
+Create a cluster.yaml file for more control:
+    #vim mycluster.yml
+        ->apiVersion: eksctl.io/v1alpha5
+        ->kind: ClusterConfig
+        ->metadata:
+        ->  name: minimal-cluster
+        ->  region: us-west-2
+        ->nodeGroups:
+        ->  - name: ng-1
+        ->    instanceType: t3.small
+        ->    desiredCapacity: 1
+        ->    minSize: 1
+        ->    maxSize: 2
+    #eksctl create cluster -f cluster.yaml
+
+Cost Considerations
+For a truly minimal setup:
+t3.nano or t3.micro instances (if available in your region)
+1 node minimum
+Use Fargate for serverless (pay per pod)
+Consider Spot instances for development
+
+Next Steps After Creation
+Deploy a test application:
+    #kubectl create deployment nginx --image=nginx
+    #kubectl expose deployment nginx --port=80 --type=LoadBalancer
+    #kubectl get services
+
+Important Notes
+EKS control plane costs ~$0.10/hour regardless of cluster size
+Worker nodes incur EC2 charges
+Fargate charges per vCPU/memory used
+Always delete resources when done to avoid ongoing charges
+The eksctl approach is the fastest way to get a minimal Kubernetes cluster running. It handles all the complex networking and IAM setup automatically.

@@ -3,9 +3,13 @@ kind: ClusterConfig
 metadata:
   name: fargate-cluster
   region: us-east-1
+  version: "1.35"
 
 fargateProfiles:
-- name: serverless
+- name: core-serverless
   selectors:
   - namespace: default
   - namespace: kube-system
+- name: kubernetes-dashboard
+  selectors:
+  - namespace: kubernetes-dashboard

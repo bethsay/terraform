@@ -3,11 +3,16 @@ kind: ClusterConfig
 metadata:
   name: minimal-cluster
   region: us-east-1
+  version: "1.35"
 
 nodeGroups:
 - name: minimal
   instanceType: t3.small
   desiredCapacity: 1
   minSize: 1
-  maxSize: 2
+  maxSize: 3
+  volumeSize: 20
+  # ssh:
+  #   allow: true
+  #   publicKeyName: my-existing-ec2-key
 
