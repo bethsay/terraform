@@ -2,11 +2,28 @@ For our next project lets manage an eks cluster.
     #mkdir 03-aws-eks/
 
 Before create the code for eks terraform project, lets create our first cluster. Lets use eksctl instead of the aws dashboard
-For eksctl to create the cluster, it needs an IAM user with FullAccess to EKS, EC2, CloudFormation, IAM and read permissions in Systems Manager.
-The iam_admin we had configured as aws default creds had been used by terraform apply in our iam and s3 projects.
-iam_admin doesnt have the permissions to create an eks cluster.
-Create IAM user tf-eks-admin with the right policies attached to create a cluster.
-    #cd 02-aws-iam
+For eksctl to create the cluster, it needs an IAM user with FullAccess to EKS, EC2, CloudFormation, IAM and ReadAccess to Systems Manager.
+In s3 project, we had created and iam_admin user via aws console and configured its credentials into default profile of aws.
+This default aws cli creds were subsequently used in both s3 and iam projects.
+iam_admin doesnt have the permissions to create an eks cluster so we lets create a new user for eks project.
+    #cd ../02-aws-iam
+Create IAM user tf-eks-admin without console access. Lets use the aws managed policies to provide FullAccess to EC2, CloudFormation and IAM.
+As there isnt a managed policy for eks and SystemsManager, create custom policy with a statement for eksAll and SystemsManagerRead
+    #vim eksctl.tfvars
+Create the user.
+    #terraform apply -var-file eksctl.tfvars
+    #terraform output
+If you have have not specified encryption_key in terraform.tfvars, you 
+    #terraform output -raw api_csv_path
+    #cat $(!-1)
+    #aws configure import --csv file://$(-2)
+If you have used a pgp key to encrypt the secret of your access key
+    #terraform output -raw user_name
+    #terraform output -raw api_access
+    #aws configure set aws_access_key_id $(-1) --profile $(!-2)
+    #terraform output -raw api_secret_encrypted | base64 -d | gpg -d
+    #aws configure set aws_secret_access_key $(-1) --profile $(!-4)
+
 
 Lets use our iam project to create tf-eks-admin
 Option 1: Quickest Method - Using eksctl (Recommended for Minimal Setup)

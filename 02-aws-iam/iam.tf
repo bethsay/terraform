@@ -12,6 +12,15 @@ resource "aws_iam_access_key" "first" {
   pgp_key = try(filebase64(var.encryption_key), "")
 }
 
+resource "local_file" "first" {
+  count = var.encryption_key == "" ? 1 : 0
+  filename = "${pathexpand("~/.aws/tf-creds")}/${aws_iam_user.first.id}.csv"
+  content = <<EOT
+User Name,Access key ID,Secret access key
+${aws_iam_user.first.id},${one(aws_iam_access_key.first[*].id)},${one(aws_iam_access_key.first[*].secret)}
+EOT
+}
+
 resource "aws_iam_user_login_profile" "first" {
   count                   = var.console_access ? 1 : 0
   user                    = aws_iam_user.first.name

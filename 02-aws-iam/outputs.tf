@@ -15,6 +15,10 @@ output "api_secret" {
   sensitive = true
 }
 
+output "api_csv_path" {
+  value = one(local_file.first[*].filename)
+}
+
 output "console_password" {
   value     = one(aws_iam_user_login_profile.first[*].password)
   sensitive = true

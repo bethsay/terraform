@@ -8,6 +8,10 @@ terraform {
       source  = "hashicorp/external"
       version = "~>2.3"
     }
+    local = {
+      source  = "hashicorp/local"
+      version = "~>2.5"
+    }
   }
   backend "s3" {
     bucket       = "terraform-backend-58fd44e0"
@@ -27,3 +31,4 @@ provider "aws" {
 }
 
 provider "external" {}
+provider "local" {}
