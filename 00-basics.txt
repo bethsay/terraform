@@ -10,12 +10,15 @@ Write .tf files -> terraform plan -> terraform apply
 terraform Plan will read files and tell us what changes will happen. Once we approve, we should run terraform apply
 
 Lets start with installing terraform on ubuntu
-    #wget -O - https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /etc/apt/keyrings/hashicorp-archive-keyring.gpg
+    #wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/hashicorp-archive-keyring.gpg
     #echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(grep -oP '(?<=UBUNTU_CODENAME=).*' /etc/os-release || lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
     #sudo apt update && sudo apt install terraform
     #terraform -help
 To enable autocompletion for terraform commands. This will append a line to ~/.bashrc
     #terraform -install-autocomplete
+For system wide autocompletion
+    #echo "complete -C '/usr/bin/terraform' terraform" | sudo tee /etc/bash_completion.d/terraform
+You will need to close and reopen the current terminal session to see the effect
 For other systems, check https://developer.hashicorp.com/terraform/install
 
 Lets understand the core/basic concepts of a terraform project.
