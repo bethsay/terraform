@@ -16,7 +16,7 @@ output "api_secret" {
 }
 
 output "api_csv_path" {
-  value = one(local_file.first[*].filename)
+  value = one(local_file.api_access[*].filename)
 }
 
 output "console_password" {
@@ -26,6 +26,10 @@ output "console_password" {
 
 output "console_url" {
   value = local.signin_url
+}
+
+output "console_csv_path" {
+  value = one(local_file.console_access[*].filename)
 }
 
 output "console_password_encrypted" {

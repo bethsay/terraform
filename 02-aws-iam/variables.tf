@@ -14,7 +14,7 @@ variable "profile_aws_conf" {
 }
 
 variable "global_tags" {
-  type    = map(string)
+  type = map(string)
   default = {
     project = "training"
     env     = "dev"

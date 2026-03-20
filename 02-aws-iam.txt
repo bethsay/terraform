@@ -201,7 +201,7 @@ Create an external data source to run the list-account-aliases command in bash
     #vim iam.tf
     #terraform apply
     #terraform state show data.external.account_alias
-Lets create a local that generates the signin url, by prependending signing.aws.amazon.com with account_alias and/or account_id.
+Lets create a local that generates the signin url, by prependending signin.aws.amazon.com with account_alias and/or account_id.
 coalesce function returns the first value that is not  null or empty string. https://developer.hashicorp.com/terraform/language/functions/coalesce
 compact  function returns a list that does not contain null or empty string. https://developer.hashicorp.com/terraform/language/functions/compact
     #terraform console
@@ -221,6 +221,8 @@ If you have used compact function
 If you have used coalesce function
     #terraform output console_url
 Now try any of the console_url in the browser and test if user_name and console_password are working
+
+---Pending: Create csv file based on aws_iam_access_key.first and aws_iam_user_login_profile.first---
 
 iam_user authentication part is done, authorization part is next.
 But before that, we must consider how we securely transfer of these sensitive outputs.
@@ -252,6 +254,7 @@ Create output blocks to share encrypted_secret and encrypted_password via one fu
 These encrypted outputs can be used by the recipient after they run a base64 decode on it and then run gpg decrypt.
     #terraform output -raw api_secret_encrypted | base64 -d | gpg -d
     #terraform output -raw console_password_encrypted | base64 -d | gpg -d
+---Pending: Create csv file only if encryption_key is not present---
 
 Improvement task:
 Create an account in https://keybase.io/ and generate pgp keys.
@@ -476,6 +479,7 @@ For aws to consider strings as policy variables they must be enclosed in ${xx}. 
 While policy variables are meant to be used for condition testing, we may use it in the last/resource section of arn. arn:partition:service:region:account:resource
 But ${xx} is also the format expected by terraform code to perform value substitution in any expression.
 Due to this conflict data source aws_iam_policy_document expects aws policy variables to be enclosed by &{xx}.
+---Pending : Update account number from wildcard(*) to some text. Substitute that test with a replace and templatestring function and in iam.tf---
 Create a var.custom_policy element to allow the actions Update, Tag, and Untag on the resource user/&{aws:username}
     #vim policies.tfvars
     #terraform apply -var-file policies.tfvars

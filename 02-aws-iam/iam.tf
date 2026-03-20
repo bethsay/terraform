@@ -12,10 +12,10 @@ resource "aws_iam_access_key" "first" {
   pgp_key = try(filebase64(var.encryption_key), "")
 }
 
-resource "local_file" "first" {
-  count = var.encryption_key == "" ? 1 : 0
-  filename = "${pathexpand("~/.aws/tf-creds")}/${aws_iam_user.first.id}.csv"
-  content = <<EOT
+resource "local_file" "api_access" {
+  count    = (var.encryption_key == "" && var.api_access) ? 1 : 0
+  filename = "${pathexpand("~/.aws/tf-creds")}/${aws_iam_user.first.id}_accessKeys.csv"
+  content  = <<EOT
 User Name,Access key ID,Secret access key
 ${aws_iam_user.first.id},${one(aws_iam_access_key.first[*].id)},${one(aws_iam_access_key.first[*].secret)}
 EOT
@@ -46,8 +46,17 @@ locals {
   # ]))
 }
 
+resource "local_file" "console_access" {
+  count    = (var.encryption_key == "" && var.console_access) ? 1 : 0
+  filename = "${pathexpand("~/.aws/tf-creds")}/${aws_iam_user.first.id}_credentials.csv"
+  content  = <<EOT
+User Name,Password,Console sign-in URL
+${aws_iam_user.first.id},${one(aws_iam_user_login_profile.first[*].password)},${local.signin_url}
+EOT
+}
+
 resource "aws_iam_user_policy_attachment" "aws_policy" {
-  user       = aws_iam_user.first.id
+  user = aws_iam_user.first.id
   # policy_arn = "arn:aws:iam::aws:policy/IAMUserChangePassword"
   count      = length(var.aws_policy_names)
   policy_arn = data.aws_iam_policy.aws_policy[count.index].arn
@@ -59,7 +68,7 @@ data "aws_iam_policy" "aws_policy" {
 }
 
 resource "aws_iam_user_policy" "inline_policy" {
-  user   = aws_iam_user.first.name
+  user = aws_iam_user.first.name
   # # name   = "tf-IAMreadAll"
   # # policy = data.aws_iam_policy_document.read_all.json
   # name   = "tf-IAMselfManage"
@@ -100,7 +109,8 @@ data "aws_iam_policy_document" "inline_policy" {
     data.aws_iam_policy_document.console_security[*].json,
   )
   dynamic "statement" {
-    for_each = var.custom_policy
+    # for_each = var.custom_policy
+    for_each = local.custom_policy
     content {
       sid       = statement.value.sid
       effect    = statement.value.effect
@@ -118,3 +128,27 @@ data "aws_iam_policy_document" "inline_policy" {
   }
 }
 
+locals {
+  custom_policy = [
+    for stmt in var.custom_policy : merge(stmt, {
+      resources = [
+        # for res in stmt.resources : replace(res, "TF_ACCOUNT_ID", data.aws_caller_identity.account_id.id)
+        for res in stmt.resources : templatestring(res, {
+          tf_account_id = data.aws_caller_identity.account_id.id
+          tf_user_name  = aws_iam_user.first.id
+          tf_user_arn   = aws_iam_user.first.arn
+        })
+      ]
+      condition = [
+        for cond in lookup(stmt, "condition", []) : merge(cond, {
+          values = [
+            for val in cond.values : templatestring(val, {
+              tf_account_id = data.aws_caller_identity.account_id.id
+            })
+          ]
+        })
+      ]
+      }
+    )
+  ]
+}

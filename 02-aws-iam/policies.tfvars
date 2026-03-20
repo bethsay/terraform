@@ -3,17 +3,20 @@
 custom_policy_name = "tf-IAMselfAndS3backend"
 custom_policy = [
   {
-    sid       = "IAMselfModify",
-    actions   = ["iam:UpdateUser", "iam:TagUser", "iam:UntagUser"],
-    resources = ["arn:aws:iam::*:user/&{aws:username}"],
+    sid     = "IAMselfModify",
+    actions = ["iam:UpdateUser", "iam:TagUser", "iam:UntagUser"],
+    # resources = ["arn:aws:iam::*:user/&{aws:username}"],
+    # resources = ["arn:aws:iam::TF_ACCOUNT_ID:user/&{aws:username}"],
+    # resources = ["arn:aws:iam::$${tf_account_id}:user/$${tf_user_name}"],
+    resources = ["$${tf_user_arn}"],
   },
   {
     sid     = "S3consoleListBuckets",
     actions = ["s3:ListAllMyBuckets"],
   },
   {
-    sid       = "S3exclusiveBackendBucket",
-    actions   = [
+    sid = "S3exclusiveBackendBucket",
+    actions = [
       "s3:CreateBucket", "s3:DeleteBucket*",
       "s3:ListBucket*", "s3:GetBucket*", "s3:PutBucket*",
       "s3:GetObject*", "s3:PutObject*", "s3:DeleteObject*",
@@ -26,7 +29,8 @@ custom_policy = [
     condition = [
       { test     = "StringEquals",
         variable = "aws:ResourceAccount",
-        values   = ["&{aws:PrincipalAccount}"],
+        # values   = ["&{aws:PrincipalAccount}"],
+        values = ["$${tf_account_id}"],
       },
       { test     = "StringEquals",
         variable = "aws:RequestedRegion",
