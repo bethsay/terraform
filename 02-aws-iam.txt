@@ -479,7 +479,6 @@ For aws to consider strings as policy variables they must be enclosed in ${xx}. 
 While policy variables are meant to be used for condition testing, we may use it in the last/resource section of arn. arn:partition:service:region:account:resource
 But ${xx} is also the format expected by terraform code to perform value substitution in any expression.
 Due to this conflict data source aws_iam_policy_document expects aws policy variables to be enclosed by &{xx}.
----Pending : Update account number from wildcard(*) to some text. Substitute that test with a replace and templatestring function and in iam.tf---
 Create a var.custom_policy element to allow the actions Update, Tag, and Untag on the resource user/&{aws:username}
     #vim policies.tfvars
     #terraform apply -var-file policies.tfvars
@@ -501,6 +500,8 @@ If the backend bucket was not create by pre-init and if it is a shared bucket in
 Add an element that has ListBucket action for path navigation and GetObject, PutObject and DeleteObject for state read+write operations.
 The element must be limited to the resource arn_external_bucket, arn_external_bucket_and_backend_key and arn_external_bucket_and_backend_key.tflock
 If you want to add more S3 authorizations. https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazons3.html
+
+---Pending : Update account number from wildcard(*) to some text. Substitute that test with a replace() and templatestring() and in iam.tf---
 
 We had run this iam project and the previous s3 project using the authorization of iam_admin.
 For future project we will create iam_user and backend that is specifically scoped to the project operations.

@@ -1,0 +1,37 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: EKSManagedNode
+  region: us-east-1
+  version: "1.35"
+
+vpc:
+  # id: "vpc-xxEXISTINGxx"
+  cidr: "192.168.0.0/24"      # Default is a 192.168.0.0/16. Only half of the vpc is used to create subnets.
+  # subnets:
+  #   public:
+  #     us-east-1a: 
+  #       id: "subnet-xxEXISTINGxx"
+  #     us-east-1b:
+  #       id: "subnet-xxEXISTINGxx"
+  #   private:
+  #     us-east-1a:
+  #       id: "subnet-xxEXISTINGxx"
+  #     us-east-1b:
+  #       id: "subnet-xxEXISTINGxx"
+  clusterEndpoints:
+    publicAccess: true        # Default is true. This creates 2 subnets, each with 1/8th of vpc IPs in any 2 AZ with routes to one IGW
+    privateAccess: true       # Default is true. This creates 2 subnets, each with 1/8th of vpc IPs in any 2 AZ wait routes to one NAT
+
+managedNodeGroups:
+- name: minimal
+  instanceType: t3.small
+  # subnets:
+  #   - ZoneA-pvt
+  desiredCapacity: 1
+  minSize: 1
+  maxSize: 3
+  volumeSize: 20
+  ssh:
+    allow: true
+    publicKeyName: my-existing-ec2-key

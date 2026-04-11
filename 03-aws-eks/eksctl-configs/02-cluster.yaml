@@ -1,0 +1,43 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: EKSFargate
+  region: us-east-1
+  version: "1.35"
+
+vpc:
+  cidr: "192.168.0.0/24"      # Default is a 192.168.0.0/16. No matter the size only half of the vpc is used for subnets.
+  clusterEndpoints:           # Default is true for both publicAccess and privateAccess
+    publicAccess: true        # This creates 2 subnets, each with 1/8th of vpc IPs in any 2 AZ with routes to one IGW
+    privateAccess: true       # This creates 2 subnets, each with 1/8th of vpc IPs in any 2 AZ with routes to one NAT
+
+iam:
+  withOIDC: true              # Creates an OIDC provider for the cluster, used for required for IRSA.
+  serviceAccounts:
+  - metadata:
+      name: aws-load-balancer-controller  # Create SA linked to a Role. Required by LB controller.
+      namespace: kube-system
+    wellKnownPolicies:
+      awsLoadBalancerController: true     # Generates policies for the role
+
+accessConfig:
+  authenticationMode: API_AND_CONFIG_MAP
+  accessEntries:
+  - principalARN: arn:aws:iam::111122223333:user/DevOps
+    accessPolicies:
+      - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+        accessScope:
+          type: cluster  
+
+fargateProfiles:
+- name: kube-system
+  selectors:
+  - namespace: default
+  - namespace: kube-system
+# - name: kubernetes-dashboard
+#   selectors:
+#   - namespace: kubernetes-dashboard
+- name: dev
+  selectors:
+  - namespace: redis-dev
+  - namespace: mongo-dev

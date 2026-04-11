@@ -198,7 +198,7 @@ There are 3 solutions for this for_each error.
     Another solution is to replace the "for_each = toset()" with count whose value is the length of a list.
         #terraform destroy
         #terraform console
-            #toset([lower(replace(random_id.third.b64_url, "_", "-")), random_pet.third.id})
+            #toset([lower(replace(random_id.third.b64_url, "_", "-")), random_pet.third.id])
             #tolist([lower(replace(random_id.third.b64_url, "_", "-")), random_pet.third.id])
     Define the list as a local. Set the count as length(local.list) and the name of buckets as list items at count.index
         #terraform console

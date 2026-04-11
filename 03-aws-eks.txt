@@ -4,7 +4,7 @@ For our next project lets manage an eks cluster.
 Before create the code for eks terraform project, lets create our first cluster. Lets use eksctl instead of the aws dashboard
 For eksctl to create the cluster, it needs an IAM user with FullAccess to EKS, EC2, CloudFormation, IAM and ReadAccess to Systems Manager.
 In s3 project, we had created and iam_admin user via aws console and configured its credentials into default profile of aws.
-This default aws cli creds were subsequently used in both s3 and iam projects.
+This default awscli creds were subsequently used in both s3 and iam projects.
 iam_admin doesnt have the permissions to create an eks cluster so we lets create a new user for eks project.
     #cd ../02-aws-iam
 Create IAM user tf-eks-admin without console access. Lets use the aws managed policies to provide FullAccess to EC2, CloudFormation and IAM.
@@ -16,21 +16,24 @@ Create the user.
 If you have have not specified encryption_key in terraform.tfvars, you 
     #terraform output -raw api_csv_path
     #cat $(!-1)
-    #aws configure import --csv file://$(-2)
+    #aws configure import --csv file://$(!-2)
+    #terraform output -raw user_name
+    #aws configure list --profile $(!-1)
 If you have used a pgp key to encrypt the secret of your access key
     #terraform output -raw user_name
     #terraform output -raw api_access
-    #aws configure set aws_access_key_id $(-1) --profile $(!-2)
+    #aws configure set aws_access_key_id $(!-1) --profile $(!-2)
     #terraform output -raw api_secret_encrypted | base64 -d | gpg -d
-    #aws configure set aws_secret_access_key $(-1) --profile $(!-4)
-
+    #aws configure set aws_secret_access_key $(!-1) --profile $(!-4)
+    #aws configure set profile.$(!-5).region us-east-1
 
 Lets use our iam project to create tf-eks-admin
 Option 1: Quickest Method - Using eksctl (Recommended for Minimal Setup)
 Prerequisites:
-Install AWS CLI and configure it with your credentials
+Ensure aws cli is installed and configured with your credentials
     #aws --version
-    #aws configure list
+    #aws configure list-profiles
+    #aws configure list --profile tf-eks-admin
 Install kubectl
     #apt update
     #apt install -y apt-transport-https ca-certificates curl gpg
@@ -49,20 +52,24 @@ Install eksctl
     #source <(eksctl completion bash)
     #eksctl info
     #eksctl version
-    #aws configure import --csv file://~/Downloads/eks-admin_accessKeys.csv
-    #aws configure set profile.eks-admin.region us-east-1
-    #aws configure set profile.eks-admin.output json
+In 01-aws-s3 project, We had configure awscli with the accesskey and secret of iam_admin and set it as the default user.
+To run the eks based aws commands, we could append use the flag "--profile tf-eks-admin" everytime.
+Or set the AWS_PROFILE as an environment for your current terminal session and forget about using --profile flag for aws commands.
+    #export AWS_PROFILE=tf-eks-admin
+The AWS_PROFILE environment variable persists for the duration of the terminal session and is availble to all commands and scripts.
+Rerun the export command every time you restart the terminal or if you want to run eks commands on another shell session.
 Create a minimal cluster with a single command:
-    #eksctl create cluster --name my-minimal-cluster --region us-east-1 --nodegroup-name standard-workers --node-type t3.medium --nodes 1 --nodes-min 1 --nodes-max 3
     #eksctl create cluster --name my-first-cluster --region us-east-1 --profile tf-eks-admin
 Wont work with free-tier account as default type is m5.large
+If your aws is still on free-tier this would fail as default type is m5.large while you are allowed to use only t3(small,micro), c7large, m7large types.
 This creates A minimal EKS cluster with 1 worker node Using t3.medium instances (cost-effective)
+    #eksctl create cluster --name my-first-cluster --region us-east-1 --nodegroup-name standard-workers --node-type t3.small --nodes 1 --nodes-min 1 --nodes-max 3
 Automatically configures networking (VPC, subnets, security groups) and sets up kubectl configuration
 Verify your cluster:
     #kubectl get nodes
     #kubectl get pods --all-namespaces
 Clean up when done:
-    #eksctl delete cluster --name my-minimal-cluster --region us-east-1
+    #eksctl delete cluster --name my-first-cluster --region us-east-1
 
 Option 2: Even More Minimal - Using Fargate (Serverless)
 For the absolute minimal setup without managing nodes:
@@ -71,19 +78,132 @@ This creates a serverless Kubernetes cluster where AWS manages all the infrastru
 
 Option 3: Configuration File Approach
 Create a cluster.yaml file for more control:
-    #vim mycluster.yml
+    #vim mycluster.yaml
         ->apiVersion: eksctl.io/v1alpha5
         ->kind: ClusterConfig
         ->metadata:
         ->  name: minimal-cluster
         ->  region: us-west-2
         ->nodeGroups:
-        ->  - name: ng-1
-        ->    instanceType: t3.small
-        ->    desiredCapacity: 1
-        ->    minSize: 1
-        ->    maxSize: 2
-    #eksctl create cluster -f cluster.yaml
+        ->- name: ng-1
+        ->  instanceType: t3.small
+        ->  desiredCapacity: 1
+        ->  minSize: 1
+        ->  maxSize: 2
+    #eksctl create cluster -f cluster.yaml --profile tf-eks-admin
+    #kubectl config get-contexts
+When eksctl finishes, it write the cluster and user details into ~/.kube/config and sets it as current context.
+If eksctl fails/errors out but has successfully created the cluster, then you will have to fetch the config with
+    #eksctl utils write-kubeconfig --cluster=EKSFargate --kubeconfig=./config.temp
+    #less ./config.temp
+If it looks right, you can re-run the command without the "--kubeconfig" flag to write into ~/.kube/config
+Or you avoid modifying the default kubeconfig and set the env with "#export KUBECONFIG=/path/to/config.temp"
+Check the current cluster spec.
+    #kubectl config get-contexts
+    #kubectl cluster-info
+    #kubectl get nodes
+    #kubectl create deploy myweb --image=nginx --replicas=2
+    #kubectl get all
+    #kubectl delete deploy myweb
+Deploy aws-loadbalancer-controller
+    #helm repo add eks https://aws.github.io/eks-charts
+    #helm repo update
+    #aws eks list-clusters --query 'clusters[]' --output text
+        ->If there are more than 1 cluster. Update the next command with the n-1 list position of your cluster name
+    #dest_cluster=$(aws eks list-clusters --query 'clusters[0]' --output text)
+        ->Change 0 to (n-1) if your cluster isnt the first list item.
+    #dest_vpc=$(aws eks describe-cluster --name $destcluster --query "cluster.resourcesVpcConfig.vpcId" --output text)
+    #dest_region=$(aws eks describe-cluster --name $destcluster --query "cluster.arn" --output text | cut -d ':' -f4)
+    #eksctl get iamserviceaccount --cluster $dest_cluster -o json
+    #eksctl get iamserviceaccount --cluster $dest_cluster -o json | jq -r '.[].metadata.name'
+        ->If there are more than 1 service account. Update the next 2 commands with (n-1) position of loadbalancer service account
+    #lbsa_namespace=$(eksctl get iamserviceaccount --cluster $dest_cluster -o json | jq -r '.[0].metadata.namespace')
+    #lbsa_name=$(eksctl get iamserviceaccount --cluster $dest_cluster -o json | jq -r '.[0].metadata.name')
+    #echo $dest_cluster, $dest_vpc, $dest_region, $lbsa_namespace, $lbsa_name
+    #helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller -n $lbsa_namespace --set serviceAccount.create=false --set serviceAccount.name=$lbsa_name --set clusterName=$dest_cluster --set vpcId=$dest_vpc --set region=$dest_region
+    #unset dest_cluster, dest_vpc, dest_region, lbsa_namespace, lbsa_name
+    #kubectl get all -A
+    eksctl delete cluster -f cluster.yaml --profile tf-eks-admin
+
+For destroying EKS cluster of Self managed nodes, we have to drain the nodes.
+    #kubectl get nodes 
+    #kubectl drain <node_name> --ignore-daemonsets --delete-emptydir-data
+The drain operation would fail as some kube-system deployments have pod distruption budgets.
+    #kubectl get pdb -n kube-system
+    #kubectl delete pdb coredns metrics-server -n kube-system
+    #kubectl drain <node_name> --ignore-daemonsets --delete-emptydir-data
+    #eksctl delete cluster -f cluster.yaml --profile tf-eks-admin
+
+ECR
+Every region in aws has its own private ECR registry
+    #aws ecr get-authorization-token
+    #aws ecr get-authorization-token --region ap-south-1
+Enable Basic scanning at a registry level. This will be applied for every repo in default region.
+    #aws ecr get-registry-scanning-configuration
+    #aws ecr put-registry-scanning-configuration --scan-type BASIC --rules '[{"repositoryFilters": [{"filter": "*", "filterType": "WILDCARD"}], "scanFrequency": "SCAN_ON_PUSH"}]'
+    #aws ecr get-registry-scanning-configuration
+All repo that exist or will exist will be included in scanning. Irrespective of repo setting.
+Lets create empty ECRs to observe this
+    #aws ecr create-repository --repository-name project1/image1
+    #aws ecr create-repository --repository-name project1/image2 --image-scanning-configuration scanOnPush=true
+    #aws ecr describe-repositories
+We created 2 registry repos. of which only one repo has scanOnPush enabled at the repo level.
+But the registry scan setting will override the scan setting of all repos that match its filter
+    #ecr_repos_array=($(aws ecr describe-repositories --query 'repositories[].repositoryName' --output text))
+    #echo ${ecr_repos_array[@]}
+    #aws ecr batch-get-repository-scanning-configuration --repository-names ${ecr_repos_array[@]}
+    #ecr_repos_string=$(aws ecr describe-repositories --query 'repositories[].repositoryName' --output text)
+    #echo $ecr_repos_string
+    #aws ecr batch-get-repository-scanning-configuration --repository-names $ecr_repos_string
+Lets delete these repos. Deletion is allowed only for empty repos
+    #aws ecr delete-repository --repository-name ${ecr_repos_array[0]}
+    #for name in $ecr_repos_string; do aws ecr delete-repository --repository-name $name; done
+    #for name in ${ecr_repos_array[@]}; do aws ecr delete-repository --repository-name $name; done
+    #echo -e "$ecr_repos_string\n${ecr_repos_array[@]}"
+    #unset ecr_repos_string ecr_repos_array
+We had created and deleted repos within our default region's registry.
+In practice, repo creation will happen automatically when you push a project/image into ecr.
+Follow convention of project/componenet:M.m.p, for example product/frontend:1.0.6
+To delete only the latest and dev versions of the an image
+    #aws ecr batch-delete-image --repository-name=<repo-name> --image-ids imageTag=latest imageTag=dev
+Apply lifecycle policy to every new repo. These can be overridden at a pre repo level.
+    #aws ecr create-repository-creation-template --prefix "ROOT" --applied-for "CREATE_ON_PUSH" "PULL_THROUGH_CACHE" --lifecycle-policy file://03-aws-eks/ecr-lifecycle.json
+Create ECR pullthroughcacherule with Amazon(public.ecr.aws). Same can be setup for Kubernetes(registry.k8s.io), and Quay(quay.io)
+    #aws ecr create-pull-through-cache-rule --ecr-repository-prefix ecr-public --upstream-registry-url public.ecr.aws
+    #aws ecr describe-pull-through-cache-rules
+    #ecr_ptc=$(aws ecr describe-pull-through-cache-rules --query 'pullThroughCacheRules[].ecrRepositoryPrefix' --output text)
+    #aws ecr validate-pull-through-cache-rule --ecr-repository-prefix $ecr_ptc
+Login to your github account. Create github classic token with read:package permission.
+    #vim ~/.github_classictoken.json
+        ->{"username":"bethsay","accessToken":"xxx"}
+You are free to set any simple name for a secret that you create.
+But ECR can only use a role that allows reading secrets that have prefix "ecr-pullthroughcache/"
+    #aws secretsmanager create-secret --name ecr-pullthroughcache/github-classictoken --secret-string file://~/.github_classictoken.json
+    #aws secretsmanager list-secrets
+    #secret_id=$(aws secretsmanager list-secrets --query 'SecretList[0].ARN' --output text)
+    #aws secretsmanager get-secret-value --secret-id $secret_id
+Create ECR pullthroughcacherule with github(ghcr.io). Secret arn is required for gitlab(registry.gitlab.com), docker(registry-1.docker.io) and Azure(myregistry.azurecr.io)
+    #aws ecr create-pull-through-cache-rule --ecr-repository-prefix ghcr --upstream-registry-url ghcr.io --credential-arn $secret_id
+    #aws ecr describe-pull-through-cache-rules
+    #ecr_ptc=($(aws ecr describe-pull-through-cache-rules --query 'pullThroughCacheRules[].ecrRepositoryPrefix' --output text))
+    #for name in ${ecr_ptc[@]}; do aws ecr validate-pull-through-cache-rule --ecr-repository-prefix $name; done
+Docker Login to your ECR
+    #aws ecr get-authorization-token
+    #registry_id=$(aws ecr get-authorization-token --query 'authorizationData[0].proxyEndpoint' --output text | cut -d '/' -f 3)
+    #aws ecr get-login-password | docker login --username AWS --password-stdin $registry_id
+    #less ~/.docker/config.json
+Docker pull images from pullthroughcache
+    #docker pull $registry_id/${ecr_ptc[0]}/joeferner/redis-commander
+    #docker pull $registry_id/${ecr_ptc[1]}/docker/library/mongo
+    #docker pull $registry_id/${ecr_ptc[1]}/docker/library/mongo-express
+    #docker pull $registry_id/${ecr_ptc[1]}/docker/library/redis
+    #docker logout $registry_id
+    #aws ecr describe-repositories
+Lets empty these repos and delete them repos
+    #ecr_repos_array=($(aws ecr describe-repositories --query 'repositories[].repositoryName' --output text))
+    #for name in ${ecr_repos_array[@]}; do aws ecr delete-repository --repository-name $name --force; done
+    #unset ecr_repos_array registry_id ecr_ptc secret_id
+
 
 Cost Considerations
 For a truly minimal setup:
@@ -104,3 +224,33 @@ Worker nodes incur EC2 charges
 Fargate charges per vCPU/memory used
 Always delete resources when done to avoid ongoing charges
 The eksctl approach is the fastest way to get a minimal Kubernetes cluster running. It handles all the complex networking and IAM setup automatically.
+
+Console EKS cluster creation
+ControlNodes
+    -Create EKS with ClusterName, k8sVersion
+    -IAM Role that can provisionNodes, AccessStoreage, AccessSecrets
+    -Select VPC and subnet to deploy EKS in
+    -Define SG to manage traffic of the above subnets
+WorkerNodes
+    -Create NodeGroup with InstanceType and Count(min-max)
+    -EKS cluster name.
+kubectl config set-cluster
+
+EKS VPC Design Prod 
+Name | Availble IPs | IP CIDR
+vpc - 1024	- 192.168.0.0/22	5(resv)+1(NAT)
+
+Subnets in EKS Prod vpc
+Name    |Availble IPs|      IP CIDR     |Useable IPs
+pod-AZ1     - 128   - 192.168.0.0/25    - 122
+node-AZ1    - 64    - 192.168.0.128/26  - 58
+public-AZ1  - 32    - 192.168.0.192/27  - 26
+unused-AZ1  - 32
+pod-AZ2     - 128   - 192.168.1.0/25    - 122
+node-AZ2    - 64    - 192.168.1.128/26  - 58
+public-AZ2  - 32    - 192.168.1.192/27  - 26
+unused-AZ2  - 32
+pod-AZ3     - 128   - 192.168.2.0/25    - 122
+node-AZ3    - 64    - 192.168.2.128/26  - 58
+public-AZ3  - 32    - 192.168.2.192/27  - 26
+unused-AZ3  - 32

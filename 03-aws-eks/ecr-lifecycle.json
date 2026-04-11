@@ -1,0 +1,59 @@
+{
+  "rules": [
+    {
+        "rulePriority": 1,
+        "description": "Expire untagged images older than 2 days",
+        "selection": {
+            "tagStatus": "untagged",
+            "countType": "sinceImagePushed",
+            "countUnit": "days",
+            "countNumber": 2
+        },
+        "action": {
+            "type": "expire"
+        }
+    },
+    {
+      "rulePriority": 2,
+      "description": "Archive 6th version",
+      "selection": {
+        "tagStatus": "tagged",
+        "tagPatternList": ["v*"],
+        "countType": "imageCountMoreThan",
+        "countNumber": 5
+      },
+      "action": {
+        "type": "transition",
+        "targetStorageClass": "archive"
+      }
+    },
+    {
+      "rulePriority": 3,
+      "description": "Archive unpulled image",
+      "selection": {
+        "tagStatus": "any",
+        "countType": "sinceImagePulled",
+        "countUnit": "days",
+        "countNumber": 30
+      },
+      "action": {
+        "type": "transition",
+        "targetStorageClass": "archive"
+      }
+    },
+    {
+      "rulePriority": 4,
+      "description": "Cleanup archive",
+      "selection": {
+        "tagStatus": "any",
+        "storageClass": "archive",
+        "countType": "sinceImageTransitioned",
+        "countUnit": "days",
+        "countNumber": 90
+      },
+      "action": {
+        "type": "expire"
+      }
+    }
+  ]
+}
