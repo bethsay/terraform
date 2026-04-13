@@ -23,11 +23,23 @@ iam:
 accessConfig:
   authenticationMode: API_AND_CONFIG_MAP
   accessEntries:
-  - principalARN: arn:aws:iam::111122223333:user/DevOps
+  # - principalARN: arn:aws:iam::111122223333:role/EKSClusterAdminRole           # Uncomment after Role+Group creation
+  #   accessPolicies:
+  #   - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+  #     accessScope:
+  #       type: cluster
+  # - principalARN: arn:aws:iam::111122223333:role/EKSNamespaceAdminRole         # Uncomment after Role+Group creation
+  #   accessPolicies:
+  #   - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy
+  #     accessScope:
+  #       type: namespace
+  #       namespaces:
+  #       - dev-*
+  - principalARN: arn:aws:iam::111122223333:root
     accessPolicies:
-      - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
-        accessScope:
-          type: cluster  
+    - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy
+      accessScope:
+        type: cluster
 
 fargateProfiles:
 - name: kube-system

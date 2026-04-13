@@ -90,7 +90,7 @@ Create a cluster.yaml file for more control:
         ->  desiredCapacity: 1
         ->  minSize: 1
         ->  maxSize: 2
-    #eksctl create cluster -f cluster.yaml --profile tf-eks-admin
+    #eksctl create cluster -f 03-aws-eks/02-cluster.yaml --profile tf-eks-admin
     #kubectl config get-contexts
 When eksctl finishes, it write the cluster and user details into ~/.kube/config and sets it as current context.
 If eksctl fails/errors out but has successfully created the cluster, then you will have to fetch the config with
@@ -98,14 +98,36 @@ If eksctl fails/errors out but has successfully created the cluster, then you wi
     #less ./config.temp
 If it looks right, you can re-run the command without the "--kubeconfig" flag to write into ~/.kube/config
 Or you avoid modifying the default kubeconfig and set the env with "#export KUBECONFIG=/path/to/config.temp"
-Check the current cluster spec.
+Check if the root user can see the EKS cluster via console and can also see cluster properties. 
+This should be possible because of accessConfig.accessEntries.principalARN: <arn-root> was created.
+Check the current cluster spec via kubectl.
     #kubectl config get-contexts
     #kubectl cluster-info
     #kubectl get nodes
     #kubectl create deploy myweb --image=nginx --replicas=2
     #kubectl get all
     #kubectl delete deploy myweb
-Deploy aws-loadbalancer-controller
+To allow other IAM users to access the cluster.
+Create a role. Role should have trust policy to allow users of current AWS account. Role should have AmazonEKSClusterPolicy attached
+Create a group that allows its members to assume the above role. Add users to group.
+Create accessentry in EKS to allow Role to be ClusterAdmin or Admin scoped to a namespace
+Inform Users "You can now assume eksadminrole. First configure your API access. 
+Add awscli profile with <role-arn> and use creds of <maybe-default> profile.
+Now generate your kubeconfig."
+    #aws iam create-role --role-name EKSClusterAdminRole --assume-role-policy-document file://03-aws-eks/role-allowusersofthisaws-trust.json
+    #aws iam attach-role-policy --role-name EKSClusterAdminRole --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+    #aws iam create-group --group-name EKSClusterAdmin
+    #aws iam put-group-policy --group-name EKSClusterAdmin --policy-name AssumeEKSClusterAdminRole --policy-document file://03-aws-eks/group-assumerole-policy.json
+    #aws iam add-user-to-group --group-name EKSClusterAdmin --user-name <IAM-user>
+Uncomment the accessEntries block associated with principalARN: EKSClusterAdminRole
+    #eksctl create accessentry -f 03-aws-eks/02-cluster.yaml
+    #aws configure set profile.eksclusteradminrole.role_arn arn:aws:iam::111122223333:role/EKSClusterAdminRole
+    #aws configure set profile.eksclusteradminrole.source_profile <maybe-default>
+    #aws eks update-kubeconfig --name EKSFargate --profile eksclusteradminrole
+The same steps can be performed to create a namespace admin role and group.
+You will need to add accessEntries in cluster.yaml with AmazonEKSAdminPolicy scoped to namespace and list allowed namespaces.
+
+Deploy aws-loadbalancer-controller. We can do this because iam.serviceAccounts.metadata.name: aws-load-balancer-controller was created.
     #helm repo add eks https://aws.github.io/eks-charts
     #helm repo update
     #aws eks list-clusters --query 'clusters[]' --output text
